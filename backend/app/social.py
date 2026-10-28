@@ -20,9 +20,9 @@ def instagram_status() -> dict[str, Any]:
     ready = bool(settings.instagram_graph_api_token and settings.instagram_business_account_id)
     return {"id": "instagram", "name": "Instagram Messaging API", "state": "credentials_ready" if ready else "needs_credentials", "configured": ready}
 
-def _graph_url(path: str) -> str:
+def _graph_url(path: str, base_url: str | None = None) -> str:
     version = settings.meta_graph_version.strip().strip("/")
-    base = settings.meta_graph_base_url.rstrip("/")
+    base = (base_url or settings.meta_graph_base_url).rstrip("/")
     if not re.fullmatch(r"v\d+\.\d+", version):
         raise SocialAPIError("META_GRAPH_VERSION must look like v26.0", 500)
     return f"{base}/{version}/{path.lstrip('/')}"
@@ -54,7 +54,7 @@ async def send_instagram(recipient_id: str, text: str, confirmed: bool) -> dict[
         raise SocialAPIError("Use the Instagram-scoped recipient ID received through a supported messaging conversation.", 422)
     if not text.strip() or len(text) > 1000:
         raise SocialAPIError("Instagram message must contain 1 to 1000 characters.", 422)
-    url = _graph_url(f"{settings.instagram_business_account_id}/messages")
+    url = _graph_url(f"{settings.instagram_business_account_id}/messages", settings.instagram_graph_base_url)
     payload = {"recipient": {"id": recipient_id.strip()}, "message": {"text": text.strip()}}
     return await _post_meta(url, settings.instagram_graph_api_token, payload, "Instagram")
 
