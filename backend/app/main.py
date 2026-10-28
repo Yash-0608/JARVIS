@@ -181,7 +181,7 @@ async def social_instagram_send(payload: InstagramSendRequest):
     try:
         return await social.send_instagram(payload.recipient_id, payload.text, payload.confirmed)
     except social.SocialAPIError as exc:
-        raise HTTPException(status_code=409 if "confirmed=true" in str(exc) else 503, detail=str(exc)) from exc
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 @app.get("/api/integrations")
 def integrations():
