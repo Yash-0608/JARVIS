@@ -1,9 +1,10 @@
 """A conservative intent previewer. It never executes actions."""
 import unicodedata
+import re
 from typing import Any
 
 INTENTS: list[tuple[str, tuple[str, ...], str]] = [
-    ("send_message", ("send message", "whatsapp", "message him", "message her", "send a message", "msg kar", "message kar", "मेसेज", "संदेश पाठव"), "Messaging requires a configured official connector and confirmation."),
+    ("send_message", ("send message", "send a message", "whatsapp message", "send whatsapp", "message on whatsapp", "instagram message", "message on instagram", "send dm", "dm to", "message him", "message her", "msg kar", "message kar", "मेसेज", "संदेश पाठव"), "Messaging requires a configured official connector and confirmation."),
     ("social_summary", ("instagram", "social media", "dm", "direct message", "इंस्टाग्राम"), "Social account access depends on supported platform APIs and permissions."),
     ("call_contact", ("call ", "phone him", "phone her", "make a call", "call someone", "फोन कर", "कॉल कर"), "Calling is not enabled in this scaffold; phone permissions and a dedicated Android integration are required."),
     ("set_reminder", ("remind me", "reminder", "याद दिला", "आठवण करून दे"), "Reminder intent detected; scheduler integration is not enabled yet."),
@@ -43,7 +44,12 @@ def classify_intent(text: str) -> dict[str, Any]:
     normalized = " ".join(text.casefold().split())
     found = None
     for intent, phrases, note in INTENTS:
-        if any(p.casefold() in normalized for p in phrases):
+        # Match complete terms/phrases, not arbitrary substrings (e.g. "dm" in "admin").
+        matched = any(
+            re.search(r"(?<!\w)" + re.escape(phrase.casefold().strip()) + r"(?!\w)", normalized, flags=re.UNICODE)
+            for phrase in phrases
+        )
+        if matched:
             found = {"intent": intent, "confidence": 0.72, "note": note}
             break
     if not found:
