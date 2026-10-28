@@ -26,7 +26,24 @@ def _public_request(req: PairRequest) -> dict:
             "device_platform": req.device_platform, "created_at": req.created_at,
             "state": req.state}
 
+def _cleanup() -> None:
+    now = datetime.now(timezone.utc)
+    for code, expiry in list(_codes.items()):
+        if expiry <= now:
+            _codes.pop(code, None)
+    cutoff = now - timedelta(days=7)
+    for request_id, req in list(_requests.items()):
+        try:
+            created = datetime.fromisoformat(req.created_at)
+        except ValueError:
+            created = now
+        if req.state in {"rejected", "revoked"} and created < cutoff:
+            _requests.pop(request_id, None)
+    while len(_codes) >= 100:
+        _codes.pop(next(iter(_codes)))
+
 def create_code() -> dict:
+    _cleanup()
     code = "".join(secrets.choice("23456789ABCDEFGHJKLMNPQRSTUVWXYZ") for _ in range(6))
     ttl = max(30, min(settings.pairing_ttl_seconds, 600))
     _codes[code] = datetime.now(timezone.utc) + timedelta(seconds=ttl)
@@ -83,3 +100,13 @@ def paired_devices() -> list[dict]:
     return [{"id": req.request_id, "device_name": req.device_name,
              "device_platform": req.device_platform, "paired_at": req.created_at}
             for req in _requests.values() if req.state == "accepted"]
+
+
+def revoke_device(request_id: str) -> dict:
+    req = _requests.get(request_id)
+    if not req:
+        raise KeyError("Paired device was not found")
+    if req.state != "accepted":
+        raise ValueError("Only an accepted device can be revoked")
+    req.state = "revoked"
+    return _public_request(req)
