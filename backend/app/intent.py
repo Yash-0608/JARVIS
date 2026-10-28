@@ -1,8 +1,6 @@
 """A conservative intent previewer. It never executes actions."""
-import re
+import unicodedata
 from typing import Any
-
-TOKEN_RE = re.compile(r"[\w]+(?:['’][\w]+)*|[^\w\s]", re.UNICODE)
 
 INTENTS: list[tuple[str, tuple[str, ...], str]] = [
     ("send_message", ("send message", "whatsapp", "message him", "message her", "send a message", "msg kar", "message kar", "मेसेज", "संदेश पाठव"), "Messaging requires a configured official connector and confirmation."),
@@ -14,8 +12,32 @@ INTENTS: list[tuple[str, tuple[str, ...], str]] = [
 ]
 
 def tokenize(text: str) -> list[str]:
-    """Split words/punctuation without destroying Devanagari or other Unicode."""
-    return TOKEN_RE.findall(text.strip())
+    """Split words/punctuation while retaining Unicode combining marks.
+
+    Python's basic word-character class excludes some combining marks used
+    by Indic scripts, so build tokens using Unicode character categories.
+    """
+    tokens: list[str] = []
+    current: list[str] = []
+
+    def flush() -> None:
+        if current:
+            tokens.append("".join(current))
+            current.clear()
+
+    for char in text.strip():
+        category = unicodedata.category(char)
+        if category[0] in {"L", "N", "M"} or char == "_":
+            current.append(char)
+        elif char in {"'", "’"} and current:
+            current.append(char)
+        elif char.isspace():
+            flush()
+        else:
+            flush()
+            tokens.append(char)
+    flush()
+    return tokens
 
 def classify_intent(text: str) -> dict[str, Any]:
     normalized = " ".join(text.casefold().split())
