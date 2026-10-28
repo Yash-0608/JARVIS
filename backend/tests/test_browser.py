@@ -25,9 +25,9 @@ def test_non_youtube_play_request_does_not_execute_browser():
     assert parse_explicit_youtube_request("Play music") is None
 
 
-def test_query_validation_rejects_urls_and_empty_values_only_by_length_type():
+def test_query_validation_rejects_urls_and_invalid_values():
     assert _validate_query(" latest song  ") == "latest song"
-    for query in ("", "  ", "x" * 161, None, "song\nmalicious"):
+    for query in ("", "  ", "x" * 161, None, "song\nmalicious", "https://example.com"):
         try:
             _validate_query(query)
         except ValueError:
