@@ -10,7 +10,7 @@ def test_health_is_available_without_key():
     assert response.json()["status"] == "ok"
 
 def test_protected_intent_endpoint_requires_key(monkeypatch):
-    monkeypatch.setattr(settings, "jarvis_api_key", "unit-test-key")
+    monkeypatch.setattr(settings, "jarvis_api_key", "unit-test-key-for-ci-test-suite-123456")
     denied = client.post("/api/intent/preview", json={"text": "Jarvis call Rahul"})
     assert denied.status_code == 401
     accepted = client.post("/api/intent/preview", json={"text": "Jarvis call Rahul"}, headers={"X-JARVIS-API-Key": "unit-test-key"})
@@ -42,3 +42,14 @@ def test_pairing_status_requires_secret_header(monkeypatch):
     assert with_secret.status_code == 200
     assert with_secret.json()["state"] == "accepted"
     assert with_secret.json()["device_token"]
+
+ 
+def test_protected_endpoint_rejects_example_placeholder(monkeypatch):
+    placeholder = "replace-with-a-long-random-local-key"
+    monkeypatch.setattr(settings, "jarvis_api_key", placeholder)
+    response = client.post(
+        "/api/intent/preview",
+        json={"text": "hello"},
+        headers={"X-JARVIS-API-Key": placeholder},
+    )
+    assert response.status_code == 503
