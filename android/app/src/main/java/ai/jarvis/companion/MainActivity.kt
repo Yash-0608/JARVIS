@@ -38,7 +38,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 import java.util.Locale
 
 private val Ink = Color(0xFF222632)
@@ -106,8 +105,8 @@ private fun CompanionScreen() {
         if (requestId.isBlank() || clientSecret.isBlank() || deviceToken.isNotBlank()) return@LaunchedEffect
         while (deviceToken.isBlank()) {
             try {
-                val path = "/api/pairing/status/$requestId?secret=" + URLEncoder.encode(clientSecret, "UTF-8")
-                val result = apiCall(apiBase, path)
+                val path = "/api/pairing/status/$requestId"
+                val result = apiCall(apiBase, path, pairSecret = clientSecret)
                 val next = result.optString("state", "pending")
                 status = when (next) { "accepted" -> "Connected"; "rejected" -> "Request declined"; else -> "Waiting for Windows approval" }
                 if (next == "accepted") {
