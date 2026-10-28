@@ -10,10 +10,11 @@ def test_health_is_available_without_key():
     assert response.json()["status"] == "ok"
 
 def test_protected_intent_endpoint_requires_key(monkeypatch):
-    monkeypatch.setattr(settings, "jarvis_api_key", "unit-test-key-for-ci-test-suite-123456")
+    test_key = "unit-test-key-for-ci-test-suite-123456"
+    monkeypatch.setattr(settings, "jarvis_api_key", test_key)
     denied = client.post("/api/intent/preview", json={"text": "Jarvis call Rahul"})
     assert denied.status_code == 401
-    accepted = client.post("/api/intent/preview", json={"text": "Jarvis call Rahul"}, headers={"X-JARVIS-API-Key": "unit-test-key"})
+    accepted = client.post("/api/intent/preview", json={"text": "Jarvis call Rahul"}, headers={"X-JARVIS-API-Key": test_key})
     assert accepted.status_code == 200
     assert accepted.json()["execution"] == "preview_only"
 
