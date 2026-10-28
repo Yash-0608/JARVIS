@@ -54,7 +54,7 @@ def _validate_query(query: object) -> str:
     cleaned = " ".join(query.split()).strip()
     if not cleaned or len(cleaned) > 160:
         raise ValueError("The YouTube search query must contain 1–160 characters.")
-    if re.match(r"^(?:https?://|www\\.)", cleaned, flags=re.IGNORECASE):
+    if re.match(r"^(?:https?://|www\.)", cleaned, flags=re.IGNORECASE):
         raise ValueError("Pass search terms, not a URL.")
     return cleaned
 
