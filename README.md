@@ -38,7 +38,7 @@ Set these values in `backend/.env`:
 
 - `OLLAMA_BASE_URL=http://127.0.0.1:11434` (if Ollama's published host port is 11434)
 - `OLLAMA_MODEL=` followed by the **exact** installed tag shown by `ollama list`
-- `JARVIS_API_KEY=` a long unique random string
+- `JARVIS_API_KEY=` a unique random string of at least 32 characters. Generate one with `py -c "import secrets; print(secrets.token_urlsafe(32))"`.
 
 Start the API:
 
