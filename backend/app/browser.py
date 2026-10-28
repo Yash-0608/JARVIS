@@ -6,7 +6,6 @@ accept arbitrary URLs, execute page-provided scripts, or interact with unrelated
 from __future__ import annotations
 
 import asyncio
-import os
 import re
 from pathlib import Path
 from datetime import date
@@ -50,11 +49,13 @@ def parse_explicit_youtube_request(message: str) -> str | None:
 def _validate_query(query: object) -> str:
     if not isinstance(query, str):
         raise ValueError("The YouTube search query must be text.")
+    if any(ord(char) < 32 for char in query):
+        raise ValueError("The YouTube search query contains unsupported control characters.")
     cleaned = " ".join(query.split()).strip()
     if not cleaned or len(cleaned) > 160:
         raise ValueError("The YouTube search query must contain 1–160 characters.")
-    if any(ord(char) < 32 for char in cleaned):
-        raise ValueError("The YouTube search query contains unsupported control characters.")
+    if re.match(r"^(?:https?://|www\\.)", cleaned, flags=re.IGNORECASE):
+        raise ValueError("Pass search terms, not a URL.")
     return cleaned
 
 
@@ -76,10 +77,7 @@ async def play_youtube_search(query: str) -> dict[str, object]:
             if _context is None:
                 # Keep the browser profile in the repo's backend folder (which can
                 # live on D:), separate from the user's everyday browsing profile.
-                profile_dir = Path(
-                    os.getenv("JARVIS_BROWSER_PROFILE_DIR", "").strip()
-                    or str(Path(__file__).resolve().parents[1] / ".jarvis-browser-profile")
-                ).expanduser()
+                profile_dir = Path(__file__).resolve().parents[1] / ".jarvis-browser-profile"
                 profile_dir.mkdir(parents=True, exist_ok=True)
                 _playwright = await async_playwright().start()
                 launch_args = {
