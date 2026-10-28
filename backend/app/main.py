@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 import os, tempfile
 from pathlib import Path
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .schemas import ChatRequest, IntentRequest, PairingRequest, PairingDecision
@@ -12,8 +12,8 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="JARVIS Local Gateway", version="0.1.0", lifespan=lifespan)
-# Development-only origins. Keep server bound to localhost until LAN authentication/TLS is in place.
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=False, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type"])
+# Development-only browser origins. Native Android requests do not use browser CORS.
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=False, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type", "X-JARVIS-Device"])
 
 @app.get("/api/health")
 def health():
@@ -37,13 +37,21 @@ async def ollama_chat(payload: ChatRequest):
     except ollama.OllamaError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
+@app.post("/api/phone/chat")
+async def phone_chat(payload: ChatRequest, device_token: str | None = Header(default=None, alias="X-JARVIS-Device")):
+    if not pairing.authorize_device(device_token):
+        raise HTTPException(status_code=401, detail="Phone is not paired or access has been revoked. Pair again from the desktop.")
+    try:
+        return await ollama.chat(payload.message, payload.model)
+    except ollama.OllamaError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
 @app.post("/api/intent/preview")
 def intent_preview(payload: IntentRequest):
     return intent.classify_intent(payload.text)
 
 @app.post("/api/speech/transcribe")
 async def transcribe_audio(audio: UploadFile = File(...)):
-    """Transcribe an uploaded audio clip and return dominant language metadata."""
     if not audio.content_type or not (audio.content_type.startswith("audio/") or audio.content_type in {"application/octet-stream", "video/webm"}):
         raise HTTPException(status_code=415, detail="Upload an audio recording")
     suffix = Path(audio.filename or "recording.webm").suffix[:10] or ".webm"
@@ -55,7 +63,6 @@ async def transcribe_audio(audio: UploadFile = File(...)):
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp.write(data)
             tmp_path = tmp.name
-        # Lazy import/download so the API remains usable while ASR dependencies/models are unavailable.
         from faster_whisper import WhisperModel
         model = getattr(app.state, "asr_model", None)
         if model is None:
@@ -93,11 +100,13 @@ def pairing_decision(payload: PairingDecision):
         return pairing.decide(payload.request_id, payload.accept)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 @app.get("/api/pairing/status/{request_id}")
-def pairing_status(request_id: str):
+def pairing_status(request_id: str, secret: str):
     try:
-        return pairing.request_status(request_id)
+        return pairing.request_status(request_id, secret)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
