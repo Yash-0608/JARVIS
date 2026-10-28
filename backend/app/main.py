@@ -6,8 +6,8 @@ from fastapi.responses import JSONResponse
 import hmac
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
-from .schemas import ChatRequest, IntentRequest, PairingRequest, PairingDecision
-from . import intent, ollama, pairing
+from .schemas import ChatRequest, IntentRequest, PairingRequest, PairingDecision, WhatsAppSendRequest, InstagramSendRequest
+from . import intent, ollama, pairing, social
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -131,13 +131,29 @@ def pairing_status(request_id: str, pair_secret: str | None = Header(default=Non
 def pairing_devices():
     return {"devices": pairing.paired_devices()}
 
+@app.post("/api/social/whatsapp/send")
+async def social_whatsapp_send(payload: WhatsAppSendRequest):
+    try:
+        return await social.send_whatsapp(payload.to, payload.text, payload.confirmed)
+    except social.SocialAPIError as exc:
+        raise HTTPException(status_code=409 if "confirmed=true" in str(exc) else 503, detail=str(exc)) from exc
+
+@app.post("/api/social/instagram/send")
+async def social_instagram_send(payload: InstagramSendRequest):
+    try:
+        return await social.send_instagram(payload.recipient_id, payload.text, payload.confirmed)
+    except social.SocialAPIError as exc:
+        raise HTTPException(status_code=409 if "confirmed=true" in str(exc) else 503, detail=str(exc)) from exc
+
 @app.get("/api/integrations")
 def integrations():
+    wa = social.whatsapp_status()
+    ig = social.instagram_status()
     return {"items": [
         {"id": "ollama", "name": "Ollama / Qwen", "state": "configured_by_env", "kind": "local-ai"},
         {"id": "speech", "name": "Speech recognition", "state": "lazy_model_download", "kind": "local-ai"},
         {"id": "android", "name": "Android companion", "state": "pairing_scaffold", "kind": "device"},
-        {"id": "whatsapp", "name": "WhatsApp", "state": "not_configured", "kind": "social"},
-        {"id": "instagram", "name": "Instagram", "state": "not_configured", "kind": "social"},
+        {**wa, "kind": "social"},
+        {**ig, "kind": "social"},
         {"id": "telephony", "name": "Calls", "state": "not_implemented", "kind": "phone"},
     ]}
