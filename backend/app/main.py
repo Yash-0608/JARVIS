@@ -11,11 +11,14 @@ import hmac
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .schemas import ChatRequest, IntentRequest, PairingRequest, PairingDecision, WhatsAppSendRequest, InstagramSendRequest
-from . import intent, ollama, pairing, social
+from . import browser, intent, ollama, pairing, social
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
+    try:
+        yield
+    finally:
+        await browser.close_browser()
 
 app = FastAPI(title="JARVIS Local Gateway", version="0.1.0", lifespan=lifespan)
 _rate_buckets: dict[tuple[str, str], deque[float]] = defaultdict(deque)
