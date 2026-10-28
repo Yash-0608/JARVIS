@@ -162,6 +162,11 @@ async def chat(message: str, model: str | None = None) -> dict[str, Any]:
                 "done": data.get("done", False),
             }
     except httpx.HTTPError as exc:
+        # Preserve the explicit, allow-listed browser command even when this
+        # Ollama build or model cannot process the tools schema.
+        fallback_query = browser.parse_explicit_youtube_request(message)
+        if fallback_query is not None:
+            return await _run_youtube_tool(fallback_query, selected)
         raise OllamaError(f"Ollama chat failed at {_base()}: {exc}") from exc
     except ValueError as exc:
         raise OllamaError("Ollama returned invalid JSON for chat") from exc
