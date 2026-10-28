@@ -1,5 +1,4 @@
 from datetime import date
-import re
 
 from app.browser import parse_explicit_youtube_request, _validate_query
 
