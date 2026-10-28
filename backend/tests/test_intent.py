@@ -18,3 +18,10 @@ def test_call_intent_does_not_call():
 
 def test_unknown_request_is_conversation():
     assert classify_intent("How are you?")["intent"] == "general_conversation"
+
+
+def test_ordinary_admin_text_is_not_misclassified_as_dm():
+    assert classify_intent("I am an admin on this laptop").get("intent") == "general_conversation"
+
+def test_instagram_message_is_a_messaging_intent():
+    assert classify_intent("send an Instagram message").get("intent") == "send_message"
