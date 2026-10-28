@@ -28,6 +28,7 @@ export default function App() {
   const [pairExpiry, setPairExpiry] = useState(0);
   const [pairRequests, setPairRequests] = useState<PairRequest[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [integrationStates, setIntegrationStates] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [recording, setRecording] = useState(false);
   const [voiceOutput, setVoiceOutput] = useState(true);
@@ -46,6 +47,7 @@ export default function App() {
         setModels(names);
         setModel(current => current && names.includes(current) ? current : (names[0] || ''));
       } else setModels([]);
+      try { const statusList = await request<{items:{id:string;state:string}[]}>('/api/integrations'); setIntegrationStates(Object.fromEntries(statusList.items.map(item => [item.id, item.state]))); } catch { /* Keep last-known connector states. */ }
     } catch (e) { setOllama({ connected: false, error: e instanceof Error ? e.message : 'Backend unavailable' }); }
   }, []);
 
@@ -145,11 +147,48 @@ export default function App() {
 
       {page === 'devices' && <section className="content-page"><div className="page-heading"><div className="eyebrow"><Smartphone size={14}/> DEVICE ECOSYSTEM</div><h1>Your phone, <span>connected thoughtfully.</span></h1><p>Pair Android with a simple request-and-accept flow, like PhoneCast.</p></div><div className="pair-layout"><div className="panel pair-panel"><div className="panel-icon"><Wifi size={20}/></div><h2>Pair a new device</h2><p>Generate a short-lived code on Windows, then enter it in the JARVIS Android companion on the same trusted Wi-Fi network.</p>{pairCode ? <div className="pair-code"><span>PAIRING CODE</span><strong>{pairCode}</strong><small>{pairExpiry > 0 ? `Expires in about ${pairExpiry}s` : 'Code expired — generate a new one'}</small></div> : <div className="pair-placeholder"><Smartphone size={28}/><span>Your Android device will request access here.</span></div>}<button className="primary-button full" onClick={() => void createCode()}><Plus size={17}/>{pairCode && pairExpiry > 0 ? 'Generate another code' : 'Generate pairing code'}</button><div className="pair-safety"><ShieldCheck size={15}/><span>Pairing codes expire quickly and can be used once. This development flow should only be used on a trusted local network.</span></div></div><div className="panel request-panel"><div className="panel-top"><div><h2>Connection requests</h2><p>Review each device before granting access.</p></div><span className="count-badge">{pairRequests.length}</span></div>{pairRequests.length ? pairRequests.map(item => <div className="request-item" key={item.request_id}><div className="device-icon"><Smartphone size={19}/></div><div className="request-info"><strong>{item.device_name}</strong><span>{item.device_platform} · Requests pairing</span></div><div className="request-actions"><button className="accept-button" onClick={() => void decidePairing(item, true)} title="Accept request"><Check size={16}/></button><button className="reject-button" onClick={() => void decidePairing(item, false)} title="Reject request"><X size={16}/></button></div></div>) : <div className="empty-state"><div className="empty-visual"><Radio size={24}/></div><strong>Nothing waiting right now</strong><span>New phone requests will appear here.</span></div>}<div className="panel-separator"/><div className="linked-header"><h3>Linked devices</h3><span>{devices.length} linked</span></div>{devices.map(device => <div className="request-item" key={device.id}><div className="device-icon connected"><Smartphone size={19}/></div><div className="request-info"><strong>{device.device_name}</strong><span>{device.device_platform} · Paired</span></div><span className="connected-label"><span className="status-dot online"/> Linked</span></div>)}</div></div><div className="notice-strip"><CircleHelp size={17}/><p>Pairing is a foundation only. Notifications, call state, file transfer and remote controls each need a separate permissioned implementation in the Android app.</p></div></section>}
 
-      {page === 'connections' && <section className="content-page"><div className="page-heading"><div className="eyebrow"><Link2 size={14}/> INTEGRATIONS</div><h1>Everything in <span>its right place.</span></h1><p>Manage which tools JARVIS can reach, and see what is still waiting for setup.</p></div><div className="integration-list"><Integration icon={<Cpu size={20}/>} title="Ollama / Qwen" description={ollama.connected ? `Connected at ${ollama.base_url}` : `Not reachable. ${ollama.error || 'Start Ollama and the backend.'}`} state={ollama.connected ? 'Connected' : 'Offline'} kind={ollama.connected ? 'good' : 'warn'}/><Integration icon={<AudioLines size={20}/>} title="Speech recognition" description="Local transcription and detected-language metadata. First use may download model weights." state="On demand" kind="neutral"/><Integration icon={<Smartphone size={20}/>} title="Android companion" description="Pairing request protocol is available; build and install the companion to continue." state={devices.length ? 'Paired' : 'Setup required'} kind={devices.length ? 'good' : 'neutral'} action={() => setPage('devices')}/><Integration icon={<MessageSquare size={20}/>} title="WhatsApp" description="Requires a supported official API path, account configuration, and granted permissions. Personal chat access is not assumed." state="Not configured" kind="neutral"/><Integration icon={<Activity size={20}/>} title="Instagram" description="Requires supported Meta APIs and permissions. Some personal-account DM workflows may not be available." state="Not configured" kind="neutral"/><Integration icon={<Phone size={20}/>} title="Calls & telephony" description="Direct call control is not implemented yet; Android OS role, permissions, and device testing are required." state="Not implemented" kind="warn"/><Integration icon={<Monitor size={20}/>} title="Windows automation" description="Intent detection is preview-only until an allow-listed executor is added and locally validated." state="Scaffold" kind="neutral"/></div><div className="notice-strip"><ShieldCheck size={17}/><p>JARVIS won’t bypass platform security, guess credentials, or claim an action succeeded without a verified result. Sensitive messaging and calling actions should require confirmation.</p></div></section>}
+      {page === 'connections' && <section className="content-page"><div className="page-heading"><div className="eyebrow"><Link2 size={14}/> INTEGRATIONS</div><h1>Everything in <span>its right place.</span></h1><p>Manage which tools JARVIS can reach, and see what is still waiting for setup.</p></div><div className="integration-list"><Integration icon={<Cpu size={20}/>} title="Ollama / Qwen" description={ollama.connected ? `Connected at ${ollama.base_url}` : `Not reachable. ${ollama.error || 'Start Ollama and the backend.'}`} state={ollama.connected ? 'Connected' : 'Offline'} kind={ollama.connected ? 'good' : 'warn'}/><Integration icon={<AudioLines size={20}/>} title="Speech recognition" description="Local transcription and detected-language metadata. First use may download model weights." state="On demand" kind="neutral"/><Integration icon={<Smartphone size={20}/>} title="Android companion" description="Pairing request protocol is available; build and install the companion to continue." state={devices.length ? 'Paired' : 'Setup required'} kind={devices.length ? 'good' : 'neutral'} action={() => setPage('devices')}/><Integration icon={<MessageSquare size={20}/>} title="WhatsApp" description="Requires a supported official API path, account configuration, and granted permissions. Personal chat access is not assumed." state={integrationStates.whatsapp === "credentials_ready" ? "Credentials ready" : "Needs setup"} kind={integrationStates.whatsapp === "credentials_ready" ? "good" : "neutral"}/<Integration icon={<Activity size={20}/>} title="Instagram" description="Requires supported Meta APIs and permissions. Some personal-account DM workflows may not be available." state={integrationStates.instagram === "credentials_ready" ? "Credentials ready" : "Needs setup"} kind={integrationStates.instagram === "credentials_ready" ? "good" : "neutral"}/<Integration icon={<Phone size={20}/>} title="Calls & telephony" description="Direct call control is not implemented yet; Android OS role, permissions, and device testing are required." state="Not implemented" kind="warn"/><Integration icon={<Monitor size={20}/>} title="Windows automation" description="Intent detection is preview-only until an allow-listed executor is added and locally validated." state="Scaffold" kind="neutral"/></div><SocialSendForms status={integrationStates}/><div className="notice-strip"><ShieldCheck size={17}/><p>JARVIS won’t bypass platform security, guess credentials, or claim an action succeeded without a verified result. Sensitive messaging and calling actions should require confirmation.</p></div></section>}
 
       <footer className="app-footer"><span>JARVIS <b>v0.1.0</b></span><span><span className={`status-dot ${ollama.connected ? 'online' : ''}`}/>{ollama.connected ? 'Local model online' : 'Waiting for backend'}</span><span>Built for your workspace</span></footer>
     </main>
     {error && <div role="alert" className="toast"><div className="toast-icon"><CircleHelp size={17}/></div><span>{error}</span><button onClick={() => setError('')} aria-label="Dismiss"><X size={16}/></button></div>}
+  </div>;
+}
+
+
+function SocialSendForms({status}: {status: Record<string, string>}) {
+  const [waTo, setWaTo] = useState('');
+  const [waText, setWaText] = useState('');
+  const [waConfirm, setWaConfirm] = useState(false);
+  const [igTo, setIgTo] = useState('');
+  const [igText, setIgText] = useState('');
+  const [igConfirm, setIgConfirm] = useState(false);
+  const [result, setResult] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function submit(path: string, body: object) {
+    setBusy(true); setResult('');
+    try {
+      const response = await request<{submitted?: boolean; message_id?: string}>(path, {method:'POST', body:JSON.stringify(body)});
+      setResult("Provider accepted the request" + (response.message_id ? " · ID " + response.message_id : "") + ". Check the provider account for delivery status.");
+    } catch (e) { setResult(e instanceof Error ? e.message : 'Could not send message.'); }
+    finally { setBusy(false); }
+  }
+  return <div className="social-send-grid">
+    <form className="panel social-send-panel" onSubmit={e => { e.preventDefault(); void submit('/api/social/whatsapp/send', {to:waTo,text:waText,confirmed:true}); }}>
+      <div className="social-form-head"><div className="integration-icon"><MessageSquare size={19}/></div><div><h2>WhatsApp message</h2><p>{status.whatsapp === 'credentials_ready' ? 'Cloud API credentials detected' : 'Configure the official Cloud API in backend/.env'}</p></div></div>
+      <label>Recipient phone (international format)</label><input value={waTo} onChange={e => setWaTo(e.target.value)} placeholder="+91 98xxxxxxxx" required maxLength={30}/>
+      <label>Message</label><textarea value={waText} onChange={e => setWaText(e.target.value)} placeholder="Write the message you want to send…" rows={3} maxLength={4096} required/>
+      <label className="confirm-check"><input type="checkbox" checked={waConfirm} onChange={e => setWaConfirm(e.target.checked)}/> I reviewed the recipient and exact message.</label>
+      <button className="primary-button full" disabled={busy || !waConfirm || status.whatsapp !== 'credentials_ready'}><Send size={15}/> Send approved message</button>
+    </form>
+    <form className="panel social-send-panel" onSubmit={e => { e.preventDefault(); void submit('/api/social/instagram/send', {recipient_id:igTo,text:igText,confirmed:true}); }}>
+      <div className="social-form-head"><div className="integration-icon"><Activity size={19}/></div><div><h2>Instagram message</h2><p>{status.instagram === 'credentials_ready' ? 'Graph API credentials detected' : 'Configure the professional-account API in backend/.env'}</p></div></div>
+      <label>Instagram-scoped recipient ID</label><input value={igTo} onChange={e => setIgTo(e.target.value)} placeholder="Recipient ID from an allowed conversation" required maxLength={30}/>
+      <label>Message</label><textarea value={igText} onChange={e => setIgText(e.target.value)} placeholder="Write the message you want to send…" rows={3} maxLength={1000} required/>
+      <label className="confirm-check"><input type="checkbox" checked={igConfirm} onChange={e => setIgConfirm(e.target.checked)}/> I reviewed the recipient and exact message.</label>
+      <button className="primary-button full" disabled={busy || !igConfirm || status.instagram !== 'credentials_ready'}><Send size={15}/> Send approved message</button>
+    </form>
+    {result && <div className="social-result" role="status">{result}</div>}
   </div>;
 }
 
