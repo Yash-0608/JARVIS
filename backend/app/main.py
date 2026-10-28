@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
 import os, tempfile
 from pathlib import Path
-from fastapi import FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
+import hmac
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .schemas import ChatRequest, IntentRequest, PairingRequest, PairingDecision
@@ -13,7 +15,22 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="JARVIS Local Gateway", version="0.1.0", lifespan=lifespan)
 # Development-only browser origins. Native Android requests do not use browser CORS.
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=False, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type", "X-JARVIS-Device"])
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=False, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type", "X-JARVIS-Device", "X-JARVIS-API-Key", "X-JARVIS-Pair-Secret"])
+
+@app.middleware("http")
+async def authenticate_local_api(request: Request, call_next):
+    # Pairing bootstrap endpoints use one-time codes/secrets; phone chat uses its per-device token.
+    path = request.url.path
+    public_bootstrap = path == "/api/health" or path == "/api/pairing/request" or path.startswith("/api/pairing/status/") or path == "/api/phone/chat"
+    if request.method == "OPTIONS" or public_bootstrap:
+        return await call_next(request)
+    expected = settings.jarvis_api_key.strip()
+    supplied = request.headers.get("X-JARVIS-API-Key", "")
+    if not expected:
+        return JSONResponse(status_code=503, content={"detail": "Set JARVIS_API_KEY in backend/.env before using API endpoints."})
+    if not supplied or not hmac.compare_digest(supplied, expected):
+        return JSONResponse(status_code=401, content={"detail": "Missing or invalid X-JARVIS-API-Key."})
+    return await call_next(request)
 
 @app.get("/api/health")
 def health():
@@ -104,9 +121,9 @@ def pairing_decision(payload: PairingDecision):
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 @app.get("/api/pairing/status/{request_id}")
-def pairing_status(request_id: str, secret: str):
+def pairing_status(request_id: str, pair_secret: str | None = Header(default=None, alias="X-JARVIS-Pair-Secret")):
     try:
-        return pairing.request_status(request_id, secret)
+        return pairing.request_status(request_id, pair_secret or "")
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
