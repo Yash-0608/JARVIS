@@ -1,45 +1,53 @@
-# JARVIS implementation report
+# JARVIS implementation and final audit report
 
 **Repository:** https://github.com/Yash-0608/JARVIS  
-**Baseline release:** 0.1.0  
-**Last verified CI revision:** 3a6c212e0d7c2cce19d392faff1727982f733f5b  
-**CI run:** https://github.com/Yash-0608/JARVIS/actions/runs/40687259607  
-**CI result:** successful for backend, frontend and Android build jobs.
+**Audit date:** 2026-10-28  
+**Code revision verified by CI:** `e3bc08cf30809edf71e74596f67e50e346276926`  
+**GitHub Actions run:** https://github.com/Yash-0608/JARVIS/actions/runs/40689644937  
+**CI verdict:** All three jobs passed: backend tests, frontend production build, Android debug assembly.
 
-## Implemented in this revision
+## What is implemented
 
-- FastAPI local gateway with a configurable Ollama base URL and model tag, model listing/status, and Qwen chat forwarding.
-- Speech upload endpoint using Faster-Whisper with transcript, detected dominant language, probability, and duration.
-- Unicode-aware tokenizer that preserves combining marks used in Indic scripts, with unit tests.
-- Conservative initial intent classifier. It emits previews only; it does not let the model execute arbitrary commands.
-- Clean white React/Vite desktop UI with chat, local model status, push-to-talk recording, detected-language feedback, browser speech-synthesis responses, connection status and phone pairing controls.
-- Kotlin/Jetpack Compose Android companion starter: one-time pairing request, desktop approval, per-device token, mobile chat, Android speech-recognition handoff, text-to-speech, and a safe dialer handoff.
-- Local development API-key gate for desktop endpoints, one-time expiring pair codes, random pair-request secret, and per-device token for phone chat.
-- Explicitly confirmed outbound text-message adapters for supported Meta WhatsApp Cloud API and Instagram Graph API flows. UI shows them as configured only when the required backend credentials are detected.
-- CI workflow for backend tests, frontend production build, and Android debug assembly.
-- Integration/security documentation and setup instructions.
+- **Ollama/Qwen gateway:** configurable endpoint and model tag, status/model-list routes, and chat forwarding.
+- **Speech pipeline:** Faster-Whisper transcription endpoint returning text and dominant-language metadata. Model initialization/inference is off the ASGI event loop.
+- **Language and intent foundation:** Unicode-category tokenizer preserving Indic combining marks; phrase-boundary intent preview. The classifier is heuristic and preview-only; it does not execute commands.
+- **Windows UI:** clean white React/Vite dashboard, text chat, local model status, push-to-talk browser recording, transcript/language feedback, speech-synthesis replies, integration status, phone pairing and confirmed-message forms.
+- **Android companion:** Kotlin/Compose UI, expiring one-time pairing code request, Windows accept/reject, per-device token, phone chat, OS speech-recognition handoff with Hindi/Marathi/English language-detection hints where supported, TTS, and safe system-dialer handoff.
+- **Pairing protections:** newest code invalidates previous codes, code is single-use, pairing requests/status polling are rate-limited, client secret is sent in a header, device tokens can be revoked from the desktop UI, and revoked devices lose chat access.
+- **Local API key:** protected desktop routes reject missing, weak, or example placeholder keys. Generate a unique value of at least 32 characters and set the same value in the backend and local frontend environment files.
+- **Outbound Meta messaging:** confirmation-gated WhatsApp Cloud API and Instagram Messaging API text-send adapters, server-side credentials, input validation, API-specific host configuration, and provider errors mapped to HTTP statuses.
+- **CI:** backend pytest, frontend production build, and Android debug APK assembly.
 
-## Verification evidence
+## Automated verification
 
-| Check | Result | Scope |
+| Check | Result | What it proves |
 |---|---|---|
-| Backend pytest | Pass | Current CI run |
-| Frontend npm run build | Pass | Current CI run |
-| Android gradle :app:assembleDebug | Pass | Current CI run; artifact is a debug starter build |
-| Ollama chat with the owner's Docker instance | Not verified | Requires the local network/port and exact installed model tag |
-| Speech accuracy for the owner's Hindi/Marathi/Hinglish voice | Not verified | Requires recordings and tests on target hardware |
-| Physical Android pairing and mobile chat | Not verified | Requires install and real-device/LAN test |
-| Live WhatsApp / Instagram delivery | Not verified | Requires the owner's eligible Meta account, approved permissions, credentials and a permitted test recipient |
-| Carrier calls, call logs, incoming-call notifications | Not implemented | Requires a separate permission/role-based Android implementation |
-| Incoming social inbox synchronization/webhooks | Not implemented | Requires provider webhooks, signature validation, and subscription configuration |
-| All social platforms | Not implemented | Only the two Meta outbound API boundaries are present |
-| Always-on, low-latency full-duplex voice | Not implemented | Current UI is push-to-talk plus response speech, not streaming real-time duplex audio |
-| Full Windows computer control / automatic multi-step task execution | Not implemented | Intent classifier is preview-only; no arbitrary shell execution is exposed |
+| Backend pytest | **PASS — 18 tests** | API-key gate, placeholder-key rejection, pairing rate limit/secret/replay/revocation rules, Unicode tokenization, intent phrase boundaries, and social-message validation/confirmation |
+| Frontend `npm run build` | **PASS** | TypeScript/Vite production build succeeds |
+| Android `gradle :app:assembleDebug` | **PASS** | Kotlin/Compose application compiles into a debug build |
+| GitHub Actions | **PASS** | All three jobs succeeded for the code revision linked above |
 
-## Release limitations and safety
+This is automated source/build verification, not proof that every real-world integration works.
 
-This is a validated starter, **not a claim of zero bugs or production readiness**. The CI checks compile the current source and run the included automated tests; they cannot validate a particular Windows/Android combination, GPU/CPU performance, credentials, third-party quotas, account eligibility, real call behavior, or subjective speech accuracy.
+## Not verified on the owner's devices/accounts
 
-The pairing implementation uses in-memory state and development HTTP, so its codes/tokens are lost on backend restart and it is not designed for an untrusted network. Keep the API on localhost unless following the documented trusted-LAN setup. Never port-forward it to the internet. Production needs TLS, durable/revocable device sessions, rate limits, stronger authentication, auditable consent and secure secret storage.
+- The gateway has **not** been connected to the owner's live Docker Ollama instance; the configured endpoint and exact installed Qwen tag must be checked locally.
+- Hindi/Marathi/Hinglish transcription accuracy, latency, memory consumption, and GPU/CPU behavior have not been measured on the intended Windows machine.
+- Android install, phone pairing over the actual LAN, disconnect/reconnect, speech provider behavior, and TTS have not been tested on a physical phone.
+- WhatsApp/Instagram credentials and account eligibility have not been supplied; **no live messages have been sent or delivery verified**. Provider acceptance alone is not proof of delivery.
+- The Android speech-recognition handoff may use an online service depending on the device/provider; it is not guaranteed to be local.
 
-Before enabling real messaging, double-check the recipient, message and provider eligibility. Provider acceptance is not equivalent to delivery; use provider delivery-status webhooks for a confirmed outcome.
+## Important requested capabilities that are not complete
+
+- **Calling:** the mobile UI opens Android's system dialer. Direct outgoing-call execution, incoming-call detection, answering, call-state monitoring and call-log access are not implemented.
+- **Social access:** only outbound text-send adapters for two supported Meta API flows exist. Incoming DM/inbox synchronization, webhooks and other social platforms are not implemented.
+- **Windows control:** intent classification is a preview only. There is no complete allow-listed Windows action executor or general multi-step computer-control agent.
+- **Real-time voice:** the current experience is push-to-talk plus spoken response, not a continuous, streaming full-duplex conversation.
+
+## Security and deployment limitations
+
+The Android pairing bootstrap uses development HTTP and an in-memory registry; codes and paired sessions are lost when the backend restarts. Rate limiting is in-process and is not a substitute for a production gateway. Do not expose this service to the public internet, port-forward it, or use it on an untrusted Wi-Fi network. Production use requires authenticated TLS, durable device sessions, robust revocation, persistent rate limiting, secure secret storage and real-device threat testing.
+
+## Final assessment
+
+**Status: PASS for automated build and starter-level tests; NOT READY to claim “100% bug-free” or production-ready.** The fixes above address the issues found in this code audit, but no repository-only audit can guarantee the absence of bugs or validate local hardware, speech quality, credentials, carrier calls, and third-party message delivery. Complete the manual acceptance tests in `docs/TESTING.md` before relying on it.
