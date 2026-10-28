@@ -16,3 +16,13 @@ def test_protected_intent_endpoint_requires_key(monkeypatch):
     accepted = client.post("/api/intent/preview", json={"text": "Jarvis call Rahul"}, headers={"X-JARVIS-API-Key": "unit-test-key"})
     assert accepted.status_code == 200
     assert accepted.json()["execution"] == "preview_only"
+
+
+def test_pairing_request_rate_limit():
+    payload = {"code": "BAD234", "device_name": "Test Android", "device_platform": "Android"}
+    for _ in range(8):
+        response = client.post("/api/pairing/request", json=payload)
+        assert response.status_code == 400
+    limited = client.post("/api/pairing/request", json=payload)
+    assert limited.status_code == 429
+    assert limited.headers.get("retry-after") == "60"
