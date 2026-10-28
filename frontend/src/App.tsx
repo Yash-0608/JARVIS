@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Activity, ArrowUp, AudioLines, Check, ChevronDown, CircleHelp, Command, Cpu, Headphones, Link2, LoaderCircle, MessageSquare, Mic, MicOff, Monitor, MoreHorizontal, Phone, Plus, Radio, Send, Settings2, ShieldCheck, Smartphone, Sparkles, Wifi, X } from 'lucide-react';
+import { Activity, ArrowUp, AudioLines, Check, ChevronDown, CircleHelp, Command, Cpu, Headphones, Link2, LoaderCircle, MessageSquare, Mic, MicOff, Monitor, MoreHorizontal, Phone, Plus, Radio, Send, Settings2, ShieldCheck, Smartphone, Sparkles, Volume2, VolumeX, Wifi, X } from 'lucide-react';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 type Device = { id: string; device_name: string; device_platform: string; paired_at: string };
 type PairRequest = { request_id: string; device_name: string; device_platform: string; created_at: string; state: string };
 const API = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+const API_KEY = import.meta.env.VITE_JARVIS_API_KEY || '';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API}${path}`, { ...init, headers: { ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...(init?.headers || {}) } });
+  const response = await fetch(`${API}${path}`, { ...init, headers: { ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), 'X-JARVIS-API-Key': API_KEY, ...(init?.headers || {}) } });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.detail || `Request failed (${response.status})`);
   return data as T;
@@ -27,6 +28,7 @@ export default function App() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [error, setError] = useState('');
   const [recording, setRecording] = useState(false);
+  const [voiceOutput, setVoiceOutput] = useState(true);\n  const [voiceMeta, setVoiceMeta] = useState('');
   const [transcribing, setTranscribing] = useState(false);
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
@@ -66,7 +68,8 @@ export default function App() {
     setError(''); setDraft(''); setMessages(prev => [...prev, { role: 'user', content: text }]); setBusy(true);
     try {
       const result = await request<{response:string}>('/api/ollama/chat', { method: 'POST', body: JSON.stringify({ message: text, model: model || undefined }) });
-      setMessages(prev => [...prev, { role: 'assistant', content: result.response || 'The model returned an empty response.' }]);
+      const answer = result.response || 'The model returned an empty response.';
+      setMessages(prev => [...prev, { role: 'assistant', content: answer }]);\n      if (voiceOutput && 'speechSynthesis' in window) { window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(answer); utterance.lang = /[\\u0900-\\u097F]/.test(answer) ? 'hi-IN' : 'en-IN'; window.speechSynthesis.speak(utterance); }
     } catch (e) { const message = e instanceof Error ? e.message : 'Unable to reach JARVIS backend'; setError(message); setMessages(prev => [...prev, { role: 'assistant', content: `I couldn’t reach the local model. ${message}` }]); }
     finally { setBusy(false); }
   }
@@ -98,6 +101,7 @@ export default function App() {
         try {
           const form = new FormData(); form.append('audio', new Blob(chunks.current, { type: media.mimeType || 'audio/webm' }), 'voice.webm');
           const result = await request<{text:string;language:string;language_probability:number}>('/api/speech/transcribe', { method:'POST', body:form });
+          setVoiceMeta(`Detected language: ${result.language.toUpperCase()} · ${Math.round(result.language_probability * 100)}% confidence`);
           if (result.text.trim()) await sendMessage(result.text.trim());
           else setError('No speech was detected. Try again in a quieter place.');
         } catch (e) { setError(e instanceof Error ? e.message : 'Transcription failed'); }
@@ -127,9 +131,9 @@ export default function App() {
       {page === 'assistant' && <section className="assistant-page">
         <div className="welcome-heading"><div className="eyebrow"><Sparkles size={14}/> YOUR PERSONAL AI</div><h1>A little help, <span>whenever you need it.</span></h1><p>Talk naturally. Think together. Get things done.</p></div>
         <div className="status-grid"><div className="status-card"><div className="status-icon lavender"><Cpu size={18}/></div><div className="status-content"><span>AI model</span><strong>{ollama.connected ? (model || 'Connected') : 'Not connected'}</strong></div><span className={`mini-status ${ollama.connected ? 'good' : ''}`}>{ollama.connected ? 'Ready' : 'Offline'}</span></div><div className="status-card"><div className="status-icon blue"><Mic size={18}/></div><div className="status-content"><span>Voice input</span><strong>Speech to text</strong></div><span className="mini-status">On demand</span></div><div className="status-card"><div className="status-icon mint"><Smartphone size={18}/></div><div className="status-content"><span>Phone link</span><strong>{devices.length ? `${devices.length} device linked` : 'No device linked'}</strong></div><button className="subtle-link" onClick={() => setPage('devices')}>Manage</button></div></div>
-        <div className="chat-card"><div className="chat-header"><div><h2>Conversation</h2><p>Private session · Runs on your setup</p></div><div className="model-select-wrap"><span className={`status-dot ${ollama.connected ? 'online' : ''}`}/><select value={model} onChange={e => setModel(e.target.value)} disabled={!models.length} aria-label="Ollama model">{models.length ? models.map(name => <option key={name} value={name}>{name}</option>) : <option value="">Model unavailable</option>}</select><ChevronDown size={13}/></div></div>
+        <div className="chat-card"><div className="chat-header"><div><h2>Conversation</h2><p>Private session · Runs on your setup</p></div><button className={`voice-toggle ${voiceOutput ? 'on' : ''}`} onClick={() => { setVoiceOutput(value => !value); if (voiceOutput && 'speechSynthesis' in window) window.speechSynthesis.cancel(); }} title={voiceOutput ? 'Mute spoken replies' : 'Enable spoken replies'} aria-label={voiceOutput ? 'Mute spoken replies' : 'Enable spoken replies'}>{voiceOutput ? <Volume2 size={16}/> : <VolumeX size={16}/>}</button><div className="model-select-wrap"><span className={`status-dot ${ollama.connected ? 'online' : ''}`}/><select value={model} onChange={e => setModel(e.target.value)} disabled={!models.length} aria-label="Ollama model">{models.length ? models.map(name => <option key={name} value={name}>{name}</option>) : <option value="">Model unavailable</option>}</select><ChevronDown size={13}/></div></div>
           <div className="message-list">{messages.map((message, index) => <div key={`${index}-${message.role}`} className={`message-row ${message.role}`}><div className={`message-avatar ${message.role}`}>{message.role === 'assistant' ? <AudioLines size={16}/> : 'Y'}</div><div className="message-body"><span className="message-author">{message.role === 'assistant' ? 'JARVIS' : 'YOU'} <time>{index === 0 ? 'Just now' : ''}</time></span><div className="message-text">{message.content}</div></div></div>)}{busy && <div className="message-row assistant"><div className="message-avatar assistant"><AudioLines size={16}/></div><div className="message-body"><span className="message-author">JARVIS</span><div className="typing"><i/><i/><i/></div></div></div>}</div>
-          <form className="composer" onSubmit={e => { e.preventDefault(); void sendMessage(); }}><textarea value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendMessage(); } }} placeholder="Ask JARVIS anything…" rows={2}/><div className="composer-bottom"><div className="composer-hints"><span><Command size={12}/> Enter to send</span><span>·</span><span>Shift + Enter for new line</span></div><div className="composer-buttons"><button type="button" className={`mic-button ${recording ? 'recording' : ''}`} onClick={() => void toggleRecording()} disabled={busy || transcribing} title={recording ? 'Stop recording' : 'Record voice'}>{transcribing ? <LoaderCircle className="spin" size={17}/> : recording ? <MicOff size={17}/> : <Mic size={17}/>}</button><button type="submit" className="send-button" disabled={!draft.trim() || busy}><span>Send</span><ArrowUp size={16}/></button></div></div></form>
+          <form className="composer" onSubmit={e => { e.preventDefault(); void sendMessage(); }}><textarea value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendMessage(); } }} placeholder="Ask JARVIS anything…" rows={2}/><div className="composer-bottom"><div className="composer-hints"><span><Command size={12}/> Enter to send</span><span>·</span><span>Shift + Enter for new line</span>{voiceMeta && <span className="voice-meta">{voiceMeta}</span>}</div><div className="composer-buttons"><button type="button" className={`mic-button ${recording ? 'recording' : ''}`} onClick={() => void toggleRecording()} disabled={busy || transcribing} title={recording ? 'Stop recording' : 'Record voice'}>{transcribing ? <LoaderCircle className="spin" size={17}/> : recording ? <MicOff size={17}/> : <Mic size={17}/>}</button><button type="submit" className="send-button" disabled={!draft.trim() || busy}><span>Send</span><ArrowUp size={16}/></button></div></div></form>
           <div className="privacy-note"><ShieldCheck size={14}/> Your conversation is sent to the configured local Ollama endpoint. Don’t enter passwords or access tokens.</div>
         </div>
         <div className="suggestion-row"><span>TRY ASKING</span><button onClick={() => void sendMessage('Help me plan my day in a simple, realistic way.')}>Plan my day <ArrowUp size={13}/></button><button onClick={() => void sendMessage('Explain how to connect my Android phone to this JARVIS desktop app securely.')}>Connect my phone <ArrowUp size={13}/></button><button onClick={() => void sendMessage('Give me a quick check of my local AI setup and what I should configure next.')}>Check my setup <ArrowUp size={13}/></button></div>
