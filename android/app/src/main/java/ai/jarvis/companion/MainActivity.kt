@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private suspend fun apiCall(base: String, path: String, method: String = "GET", body: JSONObject? = null, token: String? = null): JSONObject = withContext(Dispatchers.IO) {
+private suspend fun apiCall(base: String, path: String, method: String = "GET", body: JSONObject? = null, token: String? = null, pairSecret: String? = null): JSONObject = withContext(Dispatchers.IO) {
     val connection = (URL(base.trimEnd('/') + path).openConnection() as HttpURLConnection)
     try {
         connection.requestMethod = method
@@ -67,6 +67,7 @@ private suspend fun apiCall(base: String, path: String, method: String = "GET", 
             connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
         }
         if (!token.isNullOrBlank()) connection.setRequestProperty("X-JARVIS-Device", token)
+        if (!pairSecret.isNullOrBlank()) connection.setRequestProperty("X-JARVIS-Pair-Secret", pairSecret)
         val code = connection.responseCode
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
         val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
