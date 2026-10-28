@@ -1,24 +1,24 @@
 # Validation plan
 
-## Automated checks
+## Automated checks in GitHub Actions
 
-- Unit tests for Unicode tokenization, intent parsing, input validation and confirmation policy.
-- Backend API tests with mocked Ollama and speech engines.
-- Frontend lint/build checks.
-- Android unit tests for pairing-code format, expiry and request states.
+- Backend pytest: Unicode tokenizer, intent preview phrase boundaries, API-key requirement, pairing rate limiting, one-time pairing codes, request-secret validation, device authorization/revocation, and social-message confirmation/input validation.
+- Frontend production build using `npm run build`.
+- Android debug APK compilation using `gradle :app:assembleDebug`.
 
-## Manual acceptance checks
+These checks do **not** call the owner's live Ollama instance, download/transcribe voice recordings, send real Meta messages, or install the Android app on a physical phone.
 
-1. Start Ollama and confirm selected Qwen tag is listed.
-2. Send a text prompt and confirm response is returned without calling an external service.
-3. Test language detection and transcript with quiet Hindi, Marathi, English and code-mixed recordings.
-4. Deny microphone permission and confirm the UI remains usable.
-5. Pair Android with a one-time code; reject, accept, expire and replay a request.
-6. Test phone disconnect/reconnect and invalid pairing codes.
-7. Ensure social actions remain unavailable until valid official credentials are configured.
-8. Ensure no messages or calls are sent without explicit user action.
-9. Run on actual Windows + Android hardware, then document exact OS/device/model versions.
+## Manual acceptance checks still required
 
-## Honest release gate
+1. Start the local Docker Ollama service and verify the selected installed Qwen model tag, text chat, and disconnect/reconnect behavior.
+2. Test speech recognition with quiet English, Hindi, Marathi, and code-mixed recordings. Confirm confidence metadata and test CPU/GPU fallback.
+3. Grant/deny microphone permission and verify recording errors don't break the desktop UI.
+4. Install the Android debug app on a physical device. Pair, reject, expire, replay and revoke requests; verify unpaired/revoked devices cannot access chat.
+5. Test phone Wi-Fi disconnect/reconnect and ensure the app displays a truthful connection state. The current companion is not a full background service.
+6. Configure an eligible Meta test account. Confirm that the UI resets approval after editing recipient or message; then test a permitted WhatsApp message and permitted Instagram conversation. Check provider delivery webhooks; HTTP acceptance is not delivery.
+7. Confirm that the dialer handoff opens Android's system dialer and never places a call without the user pressing Call.
+8. Run the complete flow on the target Windows PC and phone. Record OS, device, model tag and dependency versions.
 
-Do not call the project bug-free until these tests pass in CI and on the intended devices. Local connector availability, model downloads, GPU/RAM limits and third-party API permissions cannot be verified from GitHub alone.
+## Release gate
+
+Do not call this project bug-free or production-ready until the manual checks pass on the intended devices and the network/authentication design is hardened. The development pairing flow uses in-memory state and plain HTTP on a trusted LAN; it is not safe for public internet exposure. Incoming social inbox sync, full telephony integration, arbitrary Windows automation, and always-on full-duplex voice are out of scope for this starter.
