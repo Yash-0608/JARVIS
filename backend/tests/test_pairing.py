@@ -28,7 +28,9 @@ def test_wrong_pairing_secret_is_rejected():
 
 
 
-def test_new_pair_code_invalidates_previous_code():
+def test_new_pair_code_invalidates_previous_code(monkeypatch):
+    choices = iter(["2"] * 6 + ["3"] * 6)
+    monkeypatch.setattr(pairing.secrets, "choice", lambda _alphabet: next(choices))
     old = pairing.create_code()
     new = pairing.create_code()
     assert old["code"] != new["code"]
