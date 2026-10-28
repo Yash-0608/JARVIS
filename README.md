@@ -2,7 +2,7 @@
 
 A local-first personal AI assistant for Windows and Android. The starter includes a Qwen/Ollama gateway, multilingual speech transcription, Unicode-aware tokenization, a conservative intent previewer, a clean white React UI, and an Android companion pairing/chat starter.
 
-> **Status: working foundation, not production-complete.** Social messaging needs Meta developer credentials and supported account types. Full Android call handling, call logs, remote device controls, and always-on full-duplex voice are not implemented. A zero-bug guarantee is not possible without CI results and testing on your own Windows PC and Android phone.
+> **Status: working foundation, not production-complete.** Social messaging needs Meta developer credentials and supported account types. Incoming social inbox sync/webhooks, full Android call handling, call logs, remote device controls, other social platforms, and always-on full-duplex voice are not implemented. A zero-bug guarantee is not possible without CI results and testing on your own Windows PC and Android phone.
 
 ## Repository layout
 
@@ -86,10 +86,12 @@ The phone pairing bootstrap uses a single-use expiring code and client secret; p
 | Android pairing | Request/accept handshake and companion starter implemented; hardware validation still required |
 | Voice conversation on Android | Push-to-talk through the installed Android speech-recognition service and TTS; provider may use online services |
 | Phone calling | Dialer handoff only; no call answering, incoming call detection, call-history reading, or background call management |
-| WhatsApp / Instagram / other social platforms | Connector boundary only until provider API credentials, allowed account type, and endpoints are configured |
+| WhatsApp / Instagram outbound | Confirmed text-send routes through official Meta APIs; requires credentials and an eligible account |
 | Arbitrary Windows task execution | Not enabled; only safe allow-listed executor design is intended |
 
 See [Architecture](docs/ARCHITECTURE.md), [Integration requirements](docs/INTEGRATIONS.md), [Android setup](android/README.md), and [Testing plan](docs/TESTING.md).
+
+The Connections page includes explicitly confirmed WhatsApp/Instagram outbound text forms. Configure the corresponding Meta credentials in backend/.env; real delivery depends on the provider accepting the request. Incoming inbox sync and webhooks are a later stage.
 
 ## Safety baseline
 
