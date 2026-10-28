@@ -181,14 +181,14 @@ function SocialSendForms({status}: {status: Record<string, string>}) {
     finally { setBusy(false); }
   }
   return <div className="social-send-grid">
-    <form className="panel social-send-panel" onSubmit={e => { e.preventDefault(); void submit('/api/social/whatsapp/send', {to:waTo,text:waText,confirmed:true}); }}>
+    <form className="panel social-send-panel" onSubmit={e => { e.preventDefault(); if (!waConfirm) { setResult("Review and confirm the exact WhatsApp recipient and message before sending."); return; } void submit('/api/social/whatsapp/send', {to:waTo,text:waText,confirmed:true}); }}>
       <div className="social-form-head"><div className="integration-icon"><MessageSquare size={19}/></div><div><h2>WhatsApp message</h2><p>{status.whatsapp === 'credentials_ready' ? 'Cloud API credentials detected' : 'Configure the official Cloud API in backend/.env'}</p></div></div>
       <label>Recipient phone (international format)</label><input value={waTo} onChange={e => { setWaTo(e.target.value); setWaConfirm(false); setResult(""); }} placeholder="+91 98xxxxxxxx" required maxLength={30} disabled={busy}/>
       <label>Message</label><textarea value={waText} onChange={e => { setWaText(e.target.value); setWaConfirm(false); setResult(""); }} placeholder="Write the message you want to send…" rows={3} maxLength={4096} required disabled={busy}/>
       <label className="confirm-check"><input type="checkbox" checked={waConfirm} onChange={e => setWaConfirm(e.target.checked)} disabled={busy}/> I reviewed the recipient and exact message.</label>
       <button className="primary-button full" disabled={busy || !waConfirm || status.whatsapp !== 'credentials_ready'}><Send size={15}/> Send approved message</button>
     </form>
-    <form className="panel social-send-panel" onSubmit={e => { e.preventDefault(); void submit('/api/social/instagram/send', {recipient_id:igTo,text:igText,confirmed:true}); }}>
+    <form className="panel social-send-panel" onSubmit={e => { e.preventDefault(); if (!igConfirm) { setResult("Review and confirm the exact Instagram recipient and message before sending."); return; } void submit('/api/social/instagram/send', {recipient_id:igTo,text:igText,confirmed:true}); }}>
       <div className="social-form-head"><div className="integration-icon"><Activity size={19}/></div><div><h2>Instagram message</h2><p>{status.instagram === 'credentials_ready' ? 'Graph API credentials detected' : 'Configure the professional-account API in backend/.env'}</p></div></div>
       <label>Instagram-scoped recipient ID</label><input value={igTo} onChange={e => { setIgTo(e.target.value); setIgConfirm(false); setResult(""); }} placeholder="Recipient ID from an allowed conversation" required maxLength={30} disabled={busy}/>
       <label>Message</label><textarea value={igText} onChange={e => { setIgText(e.target.value); setIgConfirm(false); setResult(""); }} placeholder="Write the message you want to send…" rows={3} maxLength={1000} required disabled={busy}/>
