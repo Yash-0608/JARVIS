@@ -6,7 +6,7 @@ def test_pairing_requires_code_and_explicit_acceptance():
     request = pairing.request_pairing(generated["code"], "Test Android", "Android")
     assert request["state"] == "pending"
     assert request["client_secret"]
-    assert request["request_id"] not in str(pairing.list_requests()) or request["request_id"] in str(pairing.list_requests())
+    assert request["client_secret"] not in str(pairing.list_requests())
     with pytest.raises(ValueError):
         pairing.request_pairing(generated["code"], "Replay", "Android")
     assert pairing.authorize_device(request.get("device_token")) is False
