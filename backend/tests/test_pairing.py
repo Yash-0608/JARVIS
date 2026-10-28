@@ -16,6 +16,9 @@ def test_pairing_requires_code_and_explicit_acceptance():
     assert status["state"] == "accepted"
     assert status["device_token"]
     assert pairing.authorize_device(status["device_token"]) is True
+    revoked = pairing.revoke_device(request["request_id"])
+    assert revoked["state"] == "revoked"
+    assert pairing.authorize_device(status["device_token"]) is False
 
 def test_wrong_pairing_secret_is_rejected():
     generated = pairing.create_code()
@@ -23,3 +26,13 @@ def test_wrong_pairing_secret_is_rejected():
     with pytest.raises(KeyError):
         pairing.request_status(request["request_id"], "wrong-secret")
 
+
+
+def test_new_pair_code_invalidates_previous_code():
+    old = pairing.create_code()
+    new = pairing.create_code()
+    assert old["code"] != new["code"]
+    with pytest.raises(ValueError):
+        pairing.request_pairing(old["code"], "Old code device", "Android")
+    request = pairing.request_pairing(new["code"], "Newest code device", "Android")
+    assert request["state"] == "pending"
