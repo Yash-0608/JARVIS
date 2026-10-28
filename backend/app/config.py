@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     jarvis_api_key: str = ""
     meta_graph_base_url: str = "https://graph.facebook.com"
     meta_graph_version: str = "v26.0"
+    instagram_graph_base_url: str = "https://graph.instagram.com"
     whatsapp_cloud_api_token: str = ""
     whatsapp_phone_number_id: str = ""
     instagram_graph_api_token: str = ""
