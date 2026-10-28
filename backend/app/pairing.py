@@ -44,6 +44,7 @@ def _cleanup() -> None:
 
 def create_code() -> dict:
     _cleanup()
+    _codes.clear()  # only the newest desktop code remains valid
     code = "".join(secrets.choice("23456789ABCDEFGHJKLMNPQRSTUVWXYZ") for _ in range(6))
     ttl = max(30, min(settings.pairing_ttl_seconds, 600))
     _codes[code] = datetime.now(timezone.utc) + timedelta(seconds=ttl)
