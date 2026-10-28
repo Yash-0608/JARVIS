@@ -2,15 +2,16 @@
 
 ## Automated checks in GitHub Actions
 
-- Backend pytest: Unicode tokenizer, intent preview phrase boundaries, API-key requirement, pairing rate limiting, one-time pairing codes, request-secret validation, device authorization/revocation, and social-message confirmation/input validation.
+- Backend pytest: Unicode tokenizer, intent preview phrase boundaries, API-key requirement, pairing protections, social-message confirmation/input validation, and bounded YouTube command parsing/query validation.
 - Frontend production build using `npm run build`.
 - Android debug APK compilation using `gradle :app:assembleDebug`.
 
-These checks do **not** call the owner's live Ollama instance, download/transcribe voice recordings, send real Meta messages, or install the Android app on a physical phone.
+These checks do **not** call the owner's live Ollama instance, launch Chrome/Chromium, play real YouTube videos, download/transcribe voice recordings, send real Meta messages, or install the Android app on a physical phone.
 
 ## Manual acceptance checks still required
 
 1. Start the local Docker Ollama service and verify the selected installed Qwen model tag, text chat, and disconnect/reconnect behavior.
+2. From desktop chat, run `Open YouTube, search for the latest song and play it`. Verify a separate browser window opens and a YouTube video is selected. Test autoplay restrictions, browser-not-installed handling, and browser shutdown.
 2. Test speech recognition with quiet English, Hindi, Marathi, and code-mixed recordings. Confirm confidence metadata and test CPU/GPU fallback.
 3. Grant/deny microphone permission and verify recording errors don't break the desktop UI.
 4. Install the Android debug app on a physical device. Pair, reject, expire, replay and revoke requests; verify unpaired/revoked devices cannot access chat.
