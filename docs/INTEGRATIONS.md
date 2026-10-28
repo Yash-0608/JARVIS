@@ -4,6 +4,7 @@
 |---|---|---|
 | Ollama/Qwen | Chat, model listing and status gateway | Model tag, reachable Ollama URL, local network configuration |
 | Microphone ASR | Faster-Whisper transcription + dominant language | Microphone permission, downloaded speech model, testing with target accents/languages |
+| Browser control | Qwen tool schema plus a strict YouTube-only search/play executor | Playwright dependency; Chrome or Playwright Chromium; user verifies playback; not unrestricted browsing |
 | Windows automation | Intent preview only | Per-action allow-list, Windows executor, confirmation, verification and rollback strategy |
 | Android phone | One-time pairing code, request/accept, per-device token for phone chat | Build/install app, same trusted LAN initially, OS permissions, actual device testing |
 | WhatsApp outbound | Confirmed text-send route through Meta WhatsApp Cloud API | Business Platform setup, phone-number ID, access token, eligible recipient/opt-in and Meta permissions |
