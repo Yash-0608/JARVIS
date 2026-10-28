@@ -6,7 +6,7 @@ A local-first personal AI assistant for Windows and Android. The starter include
 
 ## Repository layout
 
-- `backend/`: FastAPI local API, Ollama gateway, Faster-Whisper ASR, intent preview, secure-ish development pairing handshake.
+- `backend/`: FastAPI local API, Ollama gateway, Faster-Whisper ASR, restricted Chromium-based YouTube playback tool, intent preview, and development pairing handshake.
 - `frontend/`: React + Vite UI for chat, voice input/reply, phone pairing and connector status.
 - `android/`: Kotlin/Jetpack Compose companion with pairing, push-to-talk speech service, phone chat, text-to-speech, and a safe dialer handoff.
 - `docs/`: architecture, integration boundaries and acceptance-test plan.
@@ -83,6 +83,7 @@ The phone pairing bootstrap uses a single-use expiring code and client secret; p
 | Speech recognition + dominant-language metadata | Implemented with Faster-Whisper; first run downloads weights |
 | Spoken assistant replies on Windows | Uses browser speech synthesis; available voices depend on Windows/browser |
 | Tokenization + action intent preview | Implemented; heuristic classifier, not an autonomous planner |
+| Qwen browser tool | Allow-listed YouTube search and first-result playback in a dedicated Chromium-based browser profile; user/device testing required |
 | Android pairing | Request/accept handshake and companion starter implemented; hardware validation still required |
 | Voice conversation on Android | Push-to-talk through the installed Android speech-recognition service and TTS; provider may use online services |
 | Phone calling | Dialer handoff only; no call answering, incoming call detection, call-history reading, or background call management |
@@ -100,3 +101,16 @@ The Connections page includes explicitly confirmed WhatsApp/Instagram outbound t
 - Confirm sensitive actions (messages, calls, deleting/moving files, purchases) and verify completion.
 - Keep social tokens in `.env` on the backend, never in React code.
 - Real social-platform access is permissioned and constrained. The application will not bypass account security, scrape private accounts, or automate actions that the provider does not support.
+
+
+## YouTube browser tool
+
+In Assistant chat, try `Open YouTube, search for the latest song and play it` or `Play Kesariya on YouTube`. Qwen receives a restricted `play_youtube_search` tool schema; a deterministic parser handles the explicit example if the model does not emit a tool call. JARVIS opens YouTube search, clicks the first matching video, and attempts playback. “Latest song” is an approximate search phrase, not a verified global ranking. YouTube may block autoplay or display consent prompts; confirm playback in the browser window.
+
+Playwright is installed by the requirements file. Browser automation prefers installed Google Chrome (Chromium engine) using a separate JARVIS profile and falls back to Playwright Chromium. If neither can launch, run this once in the activated backend environment:
+
+```powershell
+python -m playwright install chromium
+```
+
+The first-time browser install downloads a separate browser runtime. The dedicated profile lives in `backend/.jarvis-browser-profile/`; it does not reuse your everyday browser profile. This browser tool only accepts search text and routes to YouTube; it does not accept arbitrary URLs or execute general browser clicks. It is not a general-purpose computer-use agent.
