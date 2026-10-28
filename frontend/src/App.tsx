@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Activity, ArrowUp, AudioLines, Check, ChevronDown, CircleHelp, Command, Cpu, Headphones, Link2, LoaderCircle, MessageSquare, Mic, MicOff, Monitor, MoreHorizontal, Phone, Plus, Radio, Send, Settings2, ShieldCheck, Smartphone, Sparkles, Volume2, VolumeX, Wifi, X } from 'lucide-react';
 
+import type { ReactNode } from 'react';
+
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 type Device = { id: string; device_name: string; device_platform: string; paired_at: string };
 type PairRequest = { request_id: string; device_name: string; device_platform: string; created_at: string; state: string };
@@ -28,7 +30,8 @@ export default function App() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [error, setError] = useState('');
   const [recording, setRecording] = useState(false);
-  const [voiceOutput, setVoiceOutput] = useState(true);\n  const [voiceMeta, setVoiceMeta] = useState('');
+  const [voiceOutput, setVoiceOutput] = useState(true);
+  const [voiceMeta, setVoiceMeta] = useState('');
   const [transcribing, setTranscribing] = useState(false);
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
@@ -69,7 +72,8 @@ export default function App() {
     try {
       const result = await request<{response:string}>('/api/ollama/chat', { method: 'POST', body: JSON.stringify({ message: text, model: model || undefined }) });
       const answer = result.response || 'The model returned an empty response.';
-      setMessages(prev => [...prev, { role: 'assistant', content: answer }]);\n      if (voiceOutput && 'speechSynthesis' in window) { window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(answer); utterance.lang = /[\\u0900-\\u097F]/.test(answer) ? 'hi-IN' : 'en-IN'; window.speechSynthesis.speak(utterance); }
+      setMessages(prev => [...prev, { role: 'assistant', content: answer }]);
+      if (voiceOutput && 'speechSynthesis' in window) { window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(answer); utterance.lang = /[ऀ-ॿ]/.test(answer) ? 'hi-IN' : 'en-IN'; window.speechSynthesis.speak(utterance); }
     } catch (e) { const message = e instanceof Error ? e.message : 'Unable to reach JARVIS backend'; setError(message); setMessages(prev => [...prev, { role: 'assistant', content: `I couldn’t reach the local model. ${message}` }]); }
     finally { setBusy(false); }
   }
@@ -149,6 +153,6 @@ export default function App() {
   </div>;
 }
 
-function Integration({icon, title, description, state, kind, action}: {icon: React.ReactNode; title: string; description: string; state: string; kind: string; action?: () => void}) {
+function Integration({icon, title, description, state, kind, action}: {icon: ReactNode; title: string; description: string; state: string; kind: string; action?: () => void}) {
   return <div className="integration-item"><div className="integration-icon">{icon}</div><div className="integration-copy"><strong>{title}</strong><p>{description}</p></div><span className={`integration-state ${kind}`}>{state}</span>{action && <button className="integration-action" onClick={action}>Configure <ArrowUp size={13}/></button>}</div>;
 }
