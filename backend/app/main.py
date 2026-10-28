@@ -164,7 +164,7 @@ async def social_whatsapp_send(payload: WhatsAppSendRequest):
     try:
         return await social.send_whatsapp(payload.to, payload.text, payload.confirmed)
     except social.SocialAPIError as exc:
-        raise HTTPException(status_code=409 if "confirmed=true" in str(exc) else 503, detail=str(exc)) from exc
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 @app.post("/api/social/instagram/send")
 async def social_instagram_send(payload: InstagramSendRequest):
