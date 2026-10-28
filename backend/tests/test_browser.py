@@ -33,3 +33,23 @@ def test_query_validation_rejects_urls_and_invalid_values():
             pass
         else:
             raise AssertionError(f"Expected query rejection for {query!r}")
+
+
+def test_qwen_browser_tool_call_is_accepted_and_query_is_normalized():
+    from app.ollama import _tool_query
+
+    call = {"tool_calls": [{"function": {
+        "name": "play_youtube_search",
+        "arguments": {"query": "  Kesariya official video  "},
+    }}]}
+    assert _tool_query(call) == "Kesariya official video"
+
+
+def test_qwen_cannot_invoke_an_unlisted_tool():
+    from app.ollama import _tool_query
+
+    call = {"tool_calls": [{"function": {
+        "name": "run_shell_command",
+        "arguments": {"command": "echo unsafe"},
+    }}]}
+    assert _tool_query(call) is None
