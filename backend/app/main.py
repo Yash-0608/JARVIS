@@ -62,8 +62,8 @@ async def authenticate_local_api(request: Request, call_next):
         return await call_next(request)
     expected = settings.jarvis_api_key.strip()
     supplied = request.headers.get("X-JARVIS-API-Key", "")
-    if not expected:
-        return JSONResponse(status_code=503, content={"detail": "Set JARVIS_API_KEY in backend/.env before using API endpoints."})
+    if len(expected) < 32 or expected.casefold().startswith("replace-with-"):
+        return JSONResponse(status_code=503, content={"detail": "Set JARVIS_API_KEY to a unique random value of at least 32 characters in backend/.env."})
     if not supplied or not hmac.compare_digest(supplied, expected):
         return JSONResponse(status_code=401, content={"detail": "Missing or invalid X-JARVIS-API-Key."})
     return await call_next(request)
