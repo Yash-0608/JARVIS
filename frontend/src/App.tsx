@@ -10,7 +10,7 @@ const API = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').repla
 const API_KEY = import.meta.env.VITE_JARVIS_API_KEY || '';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API}${path}`, { ...init, headers: { ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), 'X-JARVIS-API-Key': API_KEY, ...(init?.headers || {}) } });
+  const response = await fetch(`${API}${path}`, { ...init, headers: { ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), 'X-JARVIS-API-Key': API_KEY } });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.detail || `Request failed (${response.status})`);
   return data as T;
