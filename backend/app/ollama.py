@@ -1,4 +1,5 @@
 from typing import Any
+import asyncio
 import json
 import httpx
 from .config import settings
@@ -91,7 +92,7 @@ def _tool_query(message: dict[str, Any]) -> str | None:
 
 async def _run_youtube_tool(query: str, selected_model: str) -> dict[str, Any]:
     try:
-        result = await browser.play_youtube_search(query)
+        result = await asyncio.to_thread(browser.play_youtube_search, query)
     except Exception as exc:
         return {
             "model": selected_model,
