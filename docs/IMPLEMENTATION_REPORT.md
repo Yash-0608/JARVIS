@@ -51,3 +51,10 @@ The Android pairing bootstrap uses development HTTP and an in-memory registry; c
 ## Final assessment
 
 **Status: PASS for automated build and starter-level tests; NOT READY to claim “100% bug-free” or production-ready.** The fixes above address the issues found in this code audit, but no repository-only audit can guarantee the absence of bugs or validate local hardware, speech quality, credentials, carrier calls, and third-party message delivery. Complete the manual acceptance tests in `docs/TESTING.md` before relying on it.
+
+
+## Browser tool addendum — 2026-10-28
+
+The later browser-tool changes add a Qwen tool schema for `play_youtube_search` and a constrained Playwright executor. For the explicit request `Open YouTube, search for the latest song and play it`, the executor searches YouTube using the current year in the query, opens the first matching video, and attempts playback. The executor accepts search text only; it does not accept arbitrary URLs or general browser actions. The browser uses a separate profile under `backend/.jarvis-browser-profile/` and prefers installed Google Chrome before falling back to Playwright-managed Chromium.
+
+Automated backend tests cover command parsing, URL rejection, and tool allow-listing. CI does not test a real local Chrome installation or actual YouTube playback. A manual run on the intended Windows machine remains required; autoplay restrictions, YouTube consent prompts, ranking and playback can vary by device/session. The original audit verdict above refers to its explicitly named revision; the browser feature is a subsequent change.
