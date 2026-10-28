@@ -72,7 +72,12 @@ async def _post_meta(url: str, token: str, payload: dict[str, Any], provider: st
                 detail = "Provider rejected the request"
             raise SocialAPIError(f"{provider} API returned HTTP {response.status_code}: {detail}", 502)
         data = response.json()
-        return {"provider": provider, "submitted": True, "message_id": data.get("messages", [{}])[0].get("id") if data.get("messages") else data.get("message_id")}
+        if not isinstance(data, dict):
+            raise SocialAPIError(f"{provider} API returned an invalid response.", 502)
+        messages = data.get("messages")
+        first_message = messages[0] if isinstance(messages, list) and messages and isinstance(messages[0], dict) else {}
+        message_id = first_message.get("id") or data.get("message_id")
+        return {"provider": provider, "submitted": True, "message_id": message_id}
     except httpx.HTTPError as exc:
         raise SocialAPIError(f"{provider} API request failed: {type(exc).__name__}", 502) from exc
     except ValueError as exc:
