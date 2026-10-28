@@ -19,3 +19,14 @@ class PairingRequest(BaseModel):
 class PairingDecision(BaseModel):
     request_id: str = Field(min_length=6, max_length=100)
     accept: bool
+
+
+class WhatsAppSendRequest(BaseModel):
+    to: str = Field(min_length=7, max_length=30)
+    text: str = Field(min_length=1, max_length=4096)
+    confirmed: bool = False
+
+class InstagramSendRequest(BaseModel):
+    recipient_id: str = Field(min_length=5, max_length=30)
+    text: str = Field(min_length=1, max_length=1000)
+    confirmed: bool = False
