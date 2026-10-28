@@ -1,17 +1,17 @@
-"""Restricted local Chromium automation for explicitly requested YouTube playback.
+"""Restricted local browser automation for explicitly requested YouTube playback.
 
-The executor never accepts arbitrary URLs or arbitrary browser scripts. It only
-searches YouTube and opens the first matching video in a dedicated Chromium profile.
+The executor only searches YouTube and opens the first matching video. It does not
+accept arbitrary URLs, execute page-provided scripts, or interact with unrelated sites.
 """
 from __future__ import annotations
 
 import asyncio
+import os
 import re
-from datetime import date
 from pathlib import Path
+from datetime import date
 from urllib.parse import quote_plus
 
-_YOUTUBE_HOST = "www.youtube.com"
 _browser_lock = asyncio.Lock()
 _playwright = None
 _context = None
@@ -24,12 +24,10 @@ def parse_explicit_youtube_request(message: str) -> str | None:
         return None
     text = " ".join(message.strip().split())
     lower = text.casefold()
-    if "youtube" not in lower:
-        return None
-    if not re.search(r"\b(play|watch|listen|start playing)\b", lower):
+    if "youtube" not in lower or not re.search(r"\b(play|watch|listen|playing)\b", lower):
         return None
 
-    if re.search(r"\b(latest|newest|new|trending)\s+(song|music|track)\b", lower):
+    if re.search(r"\b(latest|newest|new|trending)\s+(?:song|music|track)\b", lower):
         return f"latest song official music video {date.today().year}"
 
     pattern = re.compile(
@@ -53,17 +51,15 @@ def _validate_query(query: object) -> str:
     if not isinstance(query, str):
         raise ValueError("The YouTube search query must be text.")
     cleaned = " ".join(query.split()).strip()
-    if not cleaned:
-        raise ValueError("Enter what you want to search for on YouTube.")
-    if len(cleaned) > 160:
-        raise ValueError("The YouTube search query must be 160 characters or fewer.")
+    if not cleaned or len(cleaned) > 160:
+        raise ValueError("The YouTube search query must contain 1–160 characters.")
     if any(ord(char) < 32 for char in cleaned):
         raise ValueError("The YouTube search query contains unsupported control characters.")
     return cleaned
 
 
 async def play_youtube_search(query: str) -> dict[str, object]:
-    """Open YouTube search, select the first video, and leave Chromium open."""
+    """Open YouTube search, select the first video, and leave the browser open."""
     global _playwright, _context, _page
     query = _validate_query(query)
     async with _browser_lock:
@@ -71,39 +67,54 @@ async def play_youtube_search(query: str) -> dict[str, object]:
             from playwright.async_api import async_playwright
         except ImportError as exc:
             raise RuntimeError(
-                "Browser support is not installed. In backend, run "
-                "'pip install -r requirements.txt' and 'python -m playwright install chromium'."
+                "Browser support is missing. In the backend folder run "
+                "'pip install -r requirements.txt'. If needed, also run "
+                "'python -m playwright install chromium'."
             ) from exc
 
         try:
             if _context is None:
-                profile_dir = Path.home() / ".jarvis" / "chromium-profile"
+                # Keep the browser profile in the repo's backend folder (which can
+                # live on D:), separate from the user's everyday browsing profile.
+                profile_dir = Path(
+                    os.getenv("JARVIS_BROWSER_PROFILE_DIR", "").strip()
+                    or str(Path(__file__).resolve().parents[1] / ".jarvis-browser-profile")
+                ).expanduser()
                 profile_dir.mkdir(parents=True, exist_ok=True)
                 _playwright = await async_playwright().start()
+                launch_args = {
+                    "user_data_dir": str(profile_dir),
+                    "headless": False,
+                    "no_viewport": True,
+                    "args": ["--autoplay-policy=no-user-gesture-required"],
+                }
                 try:
+                    # Prefer installed Google Chrome (Chromium engine) to save disk.
                     _context = await _playwright.chromium.launch_persistent_context(
-                        user_data_dir=str(profile_dir),
-                        headless=False,
-                        no_viewport=True,
-                        args=["--autoplay-policy=no-user-gesture-required"],
+                        channel="chrome", **launch_args
                     )
                 except Exception:
-                    await _playwright.stop()
-                    _playwright = None
-                    raise
+                    # Fall back to Playwright-managed Chromium if Chrome is unavailable.
+                    try:
+                        _context = await _playwright.chromium.launch_persistent_context(
+                            **launch_args
+                        )
+                    except Exception as exc:
+                        await _playwright.stop()
+                        _playwright = None
+                        raise RuntimeError(
+                            "No usable browser was found. Install Google Chrome, or run "
+                            "'python -m playwright install chromium' in the backend environment."
+                        ) from exc
                 _page = _context.pages[0] if _context.pages else await _context.new_page()
 
             if _page is None or _page.is_closed():
                 _page = await _context.new_page()
 
-            search_url = f"https://{_YOUTUBE_HOST}/results?search_query={quote_plus(query)}"
+            search_url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
             await _page.goto(search_url, wait_until="domcontentloaded", timeout=45_000)
 
-            # Dismiss a consent prompt when one is shown; do not enter account details.
-            for selector in (
-                "button:has-text('Accept all')",
-                "button:has-text('I agree')",
-            ):
+            for selector in ("button:has-text('Accept all')", "button:has-text('I agree')"):
                 try:
                     await _page.locator(selector).first.click(timeout=900)
                     break
@@ -114,10 +125,11 @@ async def play_youtube_search(query: str) -> dict[str, object]:
             await video_link.wait_for(state="visible", timeout=25_000)
             title = (await video_link.get_attribute("title")) or (await video_link.inner_text())
             await video_link.click(timeout=10_000)
-            await _page.wait_for_url(re.compile(r"https?://(?:www\.)?youtube\.com/watch"), timeout=20_000)
+            await _page.wait_for_url(
+                re.compile(r"https?://(?:www\.)?youtube\.com/watch"),
+                timeout=20_000,
+            )
 
-            # Clicking the result should normally start playback. If YouTube shows
-            # its explicit play overlay, click it once; otherwise leave playback alone.
             play_button = _page.locator("button.ytp-large-play-button")
             try:
                 await play_button.wait_for(state="visible", timeout=2_000)
@@ -130,16 +142,14 @@ async def play_youtube_search(query: str) -> dict[str, object]:
                 "query": query,
                 "title": title.strip() if title else "YouTube video",
                 "url": _page.url,
-                "message": "Opened the first matching YouTube video in a dedicated Chromium window. Confirm playback in the player.",
+                "message": "Opened the first matching YouTube video in the browser. Confirm playback in the player.",
             }
         except Exception as exc:
-            error = str(exc)
-            if "Executable doesn't exist" in error or "playwright install" in error.casefold():
-                raise RuntimeError(
-                    "Chromium is not installed for Playwright. In backend, run "
-                    "'python -m playwright install chromium', then restart JARVIS."
-                ) from exc
-            raise RuntimeError(f"Could not open a YouTube video: {type(exc).__name__}: {error[:300]}") from exc
+            if isinstance(exc, RuntimeError) and str(exc).startswith("No usable browser"):
+                raise
+            raise RuntimeError(
+                f"Could not open a YouTube video ({type(exc).__name__}): {str(exc)[:250]}"
+            ) from exc
 
 
 async def close_browser() -> None:
