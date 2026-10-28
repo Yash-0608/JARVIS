@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
 from collections import defaultdict, deque
 import time
+import threading
 import os, tempfile
 from pathlib import Path
 from fastapi import FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 import hmac
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
@@ -17,6 +19,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="JARVIS Local Gateway", version="0.1.0", lifespan=lifespan)
 _rate_buckets: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+_asr_init_lock = threading.Lock()
+
+def _transcribe_path(path: str) -> dict:
+    # Heavy model loading and inference run off the ASGI event loop.
+    from faster_whisper import WhisperModel
+    model = getattr(app.state, "asr_model", None)
+    if model is None:
+        with _asr_init_lock:
+            model = getattr(app.state, "asr_model", None)
+            if model is None:
+                model = WhisperModel(settings.asr_model, device=settings.asr_device, compute_type=settings.asr_compute_type)
+                app.state.asr_model = model
+    segments, info = model.transcribe(path, beam_size=3, vad_filter=True)
+    text = " ".join(segment.text.strip() for segment in segments).strip()
+    return {"text": text, "language": info.language, "language_probability": round(float(info.language_probability), 4), "duration": round(float(info.duration), 2)}
 # Development-only browser origins. Native Android requests do not use browser CORS.
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=False, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type", "X-JARVIS-Device", "X-JARVIS-API-Key", "X-JARVIS-Pair-Secret"])
 
@@ -99,14 +116,7 @@ async def transcribe_audio(audio: UploadFile = File(...)):
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp.write(data)
             tmp_path = tmp.name
-        from faster_whisper import WhisperModel
-        model = getattr(app.state, "asr_model", None)
-        if model is None:
-            model = WhisperModel(settings.asr_model, device=settings.asr_device, compute_type=settings.asr_compute_type)
-            app.state.asr_model = model
-        segments, info = model.transcribe(tmp_path, beam_size=3, vad_filter=True)
-        text = " ".join(segment.text.strip() for segment in segments).strip()
-        return {"text": text, "language": info.language, "language_probability": round(float(info.language_probability), 4), "duration": round(float(info.duration), 2)}
+        return await run_in_threadpool(_transcribe_path, tmp_path)
     except HTTPException:
         raise
     except Exception as exc:
