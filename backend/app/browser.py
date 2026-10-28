@@ -1,20 +1,23 @@
 """Restricted local browser automation for explicitly requested YouTube playback.
 
-The executor only searches YouTube and opens the first matching video. It does not
-accept arbitrary URLs, execute page-provided scripts, or interact with unrelated sites.
+Playwright runs on a dedicated worker thread. This avoids Windows asyncio event-loop
+limitations that can raise NotImplementedError when an async browser launches from
+a Windows ASGI server. The executor only navigates to YouTube search results and
+opens the first matching video; it accepts no arbitrary URLs or browser scripts.
 """
 from __future__ import annotations
 
 import asyncio
+import queue
 import re
-from pathlib import Path
+import threading
 from datetime import date
+from pathlib import Path
 from urllib.parse import quote_plus
 
-_browser_lock = asyncio.Lock()
-_playwright = None
-_context = None
-_page = None
+_jobs: queue.Queue = queue.Queue()
+_worker_guard = threading.Lock()
+_worker_thread: threading.Thread | None = None
 
 
 def parse_explicit_youtube_request(message: str) -> str | None:
@@ -41,6 +44,8 @@ def parse_explicit_youtube_request(message: str) -> str | None:
     query = match.group(1).strip(" \"'.,!?")
     if query.casefold().startswith("for "):
         query = query[4:].strip()
+    # Strip a common natural-language article without trying to rewrite the search.
+    query = re.sub(r"^(?:the|a|an)\s+", "", query, flags=re.IGNORECASE)
     if len(query) < 2 or len(query) > 160:
         return None
     return query
@@ -59,109 +64,143 @@ def _validate_query(query: object) -> str:
     return cleaned
 
 
-async def play_youtube_search(query: str) -> dict[str, object]:
-    """Open YouTube search, select the first video, and leave the browser open."""
-    global _playwright, _context, _page
-    query = _validate_query(query)
-    async with _browser_lock:
+def _open_video(context, query: str) -> dict[str, object]:
+    """Run Playwright operations from the one thread that owns its sync API."""
+    page = context.pages[0] if context.pages else context.new_page()
+    search_url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
+    page.goto(search_url, wait_until="domcontentloaded", timeout=45_000)
+
+    # Handle a basic consent prompt when it is displayed, without entering credentials.
+    for selector in ("button:has-text('Accept all')", "button:has-text('I agree')"):
         try:
-            from playwright.async_api import async_playwright
-        except ImportError as exc:
-            raise RuntimeError(
-                "Browser support is missing. In the backend folder run "
-                "'pip install -r requirements.txt'. If needed, also run "
-                "'python -m playwright install chromium'."
-            ) from exc
+            page.locator(selector).first.click(timeout=900)
+            break
+        except Exception:
+            pass
 
+    video_link = page.locator("ytd-video-renderer a#video-title").first
+    try:
+        video_link.wait_for(state="visible", timeout=25_000)
+    except Exception:
+        # YouTube may change its result markup; this fallback is still scoped to
+        # video links on YouTube search results, not arbitrary page controls.
+        video_link = page.locator("a#video-title[href*='/watch']").first
+        video_link.wait_for(state="visible", timeout=10_000)
+
+    title = (video_link.get_attribute("title") or video_link.inner_text() or "YouTube video").strip()
+    video_link.click(timeout=10_000)
+    page.wait_for_url(
+        re.compile(r"https?://(?:www\.)?youtube\.com/watch"),
+        timeout=20_000,
+    )
+
+    # Clicking a video often begins playback immediately. If a visible play overlay
+    # remains, click it once; browser autoplay rules may still require user interaction.
+    try:
+        play_button = page.locator("button.ytp-large-play-button")
+        play_button.wait_for(state="visible", timeout=2_000)
+        play_button.click(timeout=3_000)
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "query": query,
+        "title": title,
+        "url": page.url,
+        "message": "Opened the first matching YouTube video. Confirm playback in the browser player.",
+    }
+
+
+def _browser_worker() -> None:
+    """Own the Playwright sync runtime on this dedicated thread."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        context = None
         try:
-            if _context is None:
-                # Keep the browser profile in the repo's backend folder (which can
-                # live on D:), separate from the user's everyday browsing profile.
-                profile_dir = Path(__file__).resolve().parents[1] / ".jarvis-browser-profile"
-                profile_dir.mkdir(parents=True, exist_ok=True)
-                _playwright = await async_playwright().start()
-                launch_args = {
-                    "user_data_dir": str(profile_dir),
-                    "headless": False,
-                    "no_viewport": True,
-                    "args": ["--autoplay-policy=no-user-gesture-required"],
-                }
-                try:
-                    # Prefer installed Google Chrome (Chromium engine) to save disk.
-                    _context = await _playwright.chromium.launch_persistent_context(
-                        channel="chrome", **launch_args
-                    )
-                except Exception:
-                    # Fall back to Playwright-managed Chromium if Chrome is unavailable.
-                    try:
-                        _context = await _playwright.chromium.launch_persistent_context(
-                            **launch_args
-                        )
-                    except Exception as exc:
-                        await _playwright.stop()
-                        _playwright = None
-                        raise RuntimeError(
-                            "No usable browser was found. Install Google Chrome, or run "
-                            "'python -m playwright install chromium' in the backend environment."
-                        ) from exc
-                _page = _context.pages[0] if _context.pages else await _context.new_page()
-
-            if _page is None or _page.is_closed():
-                _page = await _context.new_page()
-
-            search_url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
-            await _page.goto(search_url, wait_until="domcontentloaded", timeout=45_000)
-
-            for selector in ("button:has-text('Accept all')", "button:has-text('I agree')"):
-                try:
-                    await _page.locator(selector).first.click(timeout=900)
+            while True:
+                item = _jobs.get()
+                if item is None:
+                    _jobs.task_done()
                     break
+                query, done, result_box = item
+                try:
+                    if context is None:
+                        profile_dir = Path(__file__).resolve().parents[1] / ".jarvis-browser-profile"
+                        profile_dir.mkdir(parents=True, exist_ok=True)
+                        launch_args = {
+                            "user_data_dir": str(profile_dir),
+                            "headless": False,
+                            "no_viewport": True,
+                            "args": ["--autoplay-policy=no-user-gesture-required"],
+                        }
+                        try:
+                            # Prefer installed Chrome to avoid a second browser download.
+                            context = playwright.chromium.launch_persistent_context(
+                                channel="chrome", **launch_args
+                            )
+                        except Exception:
+                            try:
+                                context = playwright.chromium.launch_persistent_context(**launch_args)
+                            except Exception as launch_error:
+                                raise RuntimeError(
+                                    "No usable browser could be launched. Install Google Chrome, "
+                                    "or run 'python -m playwright install chromium' in the "
+                                    "activated backend environment."
+                                ) from launch_error
+                    result_box["value"] = _open_video(context, query)
+                except Exception as exc:
+                    result_box["error"] = (
+                        f"Could not open a YouTube video ({type(exc).__name__}): {str(exc)[:250]}"
+                    )
+                finally:
+                    done.set()
+                    _jobs.task_done()
+        finally:
+            if context is not None:
+                try:
+                    context.close()
                 except Exception:
                     pass
 
-            video_link = _page.locator("ytd-video-renderer a#video-title").first
-            await video_link.wait_for(state="visible", timeout=25_000)
-            title = (await video_link.get_attribute("title")) or (await video_link.inner_text())
-            await video_link.click(timeout=10_000)
-            await _page.wait_for_url(
-                re.compile(r"https?://(?:www\.)?youtube\.com/watch"),
-                timeout=20_000,
+
+def play_youtube_search(query: str) -> dict[str, object]:
+    """Queue YouTube playback on the dedicated browser thread and wait for the result."""
+    global _worker_thread
+    query = _validate_query(query)
+    done = threading.Event()
+    result_box: dict[str, object] = {}
+
+    # Serialize startup/enqueue against shutdown so an action cannot be queued
+    # after the worker's shutdown marker.
+    with _worker_guard:
+        if _worker_thread is None or not _worker_thread.is_alive():
+            _worker_thread = threading.Thread(
+                target=_browser_worker,
+                name="JARVIS-Chromium-Worker",
+                daemon=True,
             )
+            _worker_thread.start()
+        _jobs.put((query, done, result_box))
 
-            play_button = _page.locator("button.ytp-large-play-button")
-            try:
-                await play_button.wait_for(state="visible", timeout=2_000)
-                await play_button.click(timeout=3_000)
-            except Exception:
-                pass
-
-            return {
-                "ok": True,
-                "query": query,
-                "title": title.strip() if title else "YouTube video",
-                "url": _page.url,
-                "message": "Opened the first matching YouTube video in the browser. Confirm playback in the player.",
-            }
-        except Exception as exc:
-            if isinstance(exc, RuntimeError) and str(exc).startswith("No usable browser"):
-                raise
-            raise RuntimeError(
-                f"Could not open a YouTube video ({type(exc).__name__}): {str(exc)[:250]}"
-            ) from exc
+    if not done.wait(timeout=90):
+        raise RuntimeError("The browser did not finish within 90 seconds. Check the Chromium window.")
+    if "error" in result_box:
+        raise RuntimeError(str(result_box["error"]))
+    result = result_box.get("value")
+    if not isinstance(result, dict):
+        raise RuntimeError("The browser returned no result.")
+    return result
 
 
-async def close_browser() -> None:
-    """Close the dedicated browser on a clean backend shutdown."""
-    global _playwright, _context, _page
-    async with _browser_lock:
-        if _context is not None:
-            try:
-                await _context.close()
-            finally:
-                _context = None
-                _page = None
-        if _playwright is not None:
-            try:
-                await _playwright.stop()
-            finally:
-                _playwright = None
+def close_browser() -> None:
+    """Close the dedicated browser worker cleanly when the backend stops."""
+    global _worker_thread
+    with _worker_guard:
+        worker = _worker_thread
+        if worker is None:
+            return
+        _worker_thread = None
+        _jobs.put(None)
+    worker.join(timeout=12)
