@@ -26,3 +26,19 @@ def test_pairing_request_rate_limit():
     limited = client.post("/api/pairing/request", json=payload)
     assert limited.status_code == 429
     assert limited.headers.get("retry-after") == "60"
+
+
+def test_pairing_status_requires_secret_header(monkeypatch):
+    from app import pairing
+    generated = pairing.create_code()
+    created = pairing.request_pairing(generated["code"], "Android test", "Android")
+    pairing.decide(created["request_id"], True)
+    without_secret = client.get(f"/api/pairing/status/{created['request_id']}")
+    assert without_secret.status_code == 404
+    with_secret = client.get(
+        f"/api/pairing/status/{created['request_id']}",
+        headers={"X-JARVIS-Pair-Secret": created["client_secret"]},
+    )
+    assert with_secret.status_code == 200
+    assert with_secret.json()["state"] == "accepted"
+    assert with_secret.json()["device_token"]
