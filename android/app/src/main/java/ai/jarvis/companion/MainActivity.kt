@@ -142,7 +142,7 @@ private fun CompanionScreen() {
                 val result = apiCall(apiBase, "/api/phone/chat", "POST", JSONObject().put("message", text), deviceToken)
                 val answer = result.optString("response", "I received an empty response.")
                 conversation = conversation + ("JARVIS" to answer)
-                tts.language = Locale("en", "IN")
+                tts.language = if (answer.any { it.code in 0x0900..0x097F }) Locale("hi", "IN") else Locale("en", "IN")
                 tts.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "jarvis-response")
                 input = ""
             } catch (e: Exception) { error = e.message ?: "Chat request failed" }
@@ -192,8 +192,16 @@ private fun CompanionScreen() {
                     IconButton(onClick = {
                         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
                             putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to JARVIS")
+                            // Ask compatible Android 14+ speech services to choose among these languages.
+                            // On older or incompatible providers, the system language remains the fallback.
+                            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                                putExtra("android.speech.extra.ENABLE_LANGUAGE_DETECTION", true)
+                                putStringArrayListExtra(
+                                    "android.speech.extra.LANGUAGE_DETECTION_ALLOWED_LANGUAGES",
+                                    arrayListOf("en-IN", "hi-IN", "mr-IN"),
+                                )
+                            }
                         }
                         try { voiceLauncher.launch(intent) } catch (_: Exception) { Toast.makeText(context, "Speech recognition is unavailable on this device.", Toast.LENGTH_SHORT).show() }
                     }) { Icon(Icons.Outlined.Mic, "Voice input", tint = Blue) }
