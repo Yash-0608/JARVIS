@@ -23,7 +23,7 @@ Configure these server-side only in backend/.env, copied from .env.example:
 
 The UI enables send forms only when the required environment values are present, and each outbound send requires a checkbox confirming the exact recipient and message. The backend also requires confirmed=true; it will not infer confirmation from an LLM response. A provider's HTTP success means accepted/submitted, not necessarily delivered; check provider status/webhooks.
 
-WhatsApp Cloud API is designed for the WhatsApp Business Platform, not as an unrestricted bridge to a personal WhatsApp account. Instagram messaging access requires supported professional-account setup, app permissions and conversation-specific recipient IDs. This scaffold is not a universal personal-account DM gateway, and it does not support arbitrary cold DMs. Never use browser-password scraping to bypass provider APIs.
+WhatsApp Cloud API is designed for the WhatsApp Business Platform, not as an unrestricted bridge to a personal WhatsApp account. The configured Instagram adapter targets the Instagram API with Instagram Login (`graph.instagram.com`) and expects the professional account ID plus a token with the supported Instagram messaging permission. The distinct Facebook Login flow uses a Page token and Page-scoped endpoint; don't mix its token/IDs with this Instagram Login configuration. Recipient IDs must come from a supported conversation. This scaffold is not a universal personal-account DM gateway, and it does not support arbitrary cold DMs. Never use browser-password scraping to bypass provider APIs.
 
 ## Security
 
