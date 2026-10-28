@@ -1,4 +1,6 @@
 from contextlib import asynccontextmanager
+from collections import defaultdict, deque
+import time
 import os, tempfile
 from pathlib import Path
 from fastapi import FastAPI, File, Header, HTTPException, Request, UploadFile
@@ -14,6 +16,7 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="JARVIS Local Gateway", version="0.1.0", lifespan=lifespan)
+_rate_buckets: dict[tuple[str, str], deque[float]] = defaultdict(deque)
 # Development-only browser origins. Native Android requests do not use browser CORS.
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=False, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type", "X-JARVIS-Device", "X-JARVIS-API-Key", "X-JARVIS-Pair-Secret"])
 
@@ -22,6 +25,22 @@ async def authenticate_local_api(request: Request, call_next):
     # Pairing bootstrap endpoints use one-time codes/secrets; phone chat uses its per-device token.
     path = request.url.path
     public_bootstrap = path == "/api/health" or path == "/api/pairing/request" or path.startswith("/api/pairing/status/") or path == "/api/phone/chat"
+    if request.method != "OPTIONS":
+        rate_rule = None
+        if path == "/api/pairing/request":
+            rate_rule = ("pair-request", 8)
+        elif path.startswith("/api/pairing/status/"):
+            rate_rule = ("pair-status", 40)
+        if rate_rule:
+            client_ip = request.client.host if request.client else "unknown"
+            key = (client_ip, rate_rule[0])
+            now = time.monotonic()
+            events = _rate_buckets[key]
+            while events and now - events[0] >= 60:
+                events.popleft()
+            if len(events) >= rate_rule[1]:
+                return JSONResponse(status_code=429, headers={"Retry-After": "60"}, content={"detail": "Too many pairing attempts. Wait before trying again."})
+            events.append(now)
     if request.method == "OPTIONS" or public_bootstrap:
         return await call_next(request)
     expected = settings.jarvis_api_key.strip()
@@ -130,6 +149,15 @@ def pairing_status(request_id: str, pair_secret: str | None = Header(default=Non
 @app.get("/api/pairing/devices")
 def pairing_devices():
     return {"devices": pairing.paired_devices()}
+
+@app.delete("/api/pairing/devices/{device_id}")
+def revoke_paired_device(device_id: str):
+    try:
+        return pairing.revoke_device(device_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 @app.post("/api/social/whatsapp/send")
 async def social_whatsapp_send(payload: WhatsAppSendRequest):
