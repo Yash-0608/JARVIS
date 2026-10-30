@@ -132,10 +132,10 @@ export default function App() {
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><div className="brand-mark"><AudioLines size={21}/></div><div><strong>JARVIS</strong><span>PERSONAL AI</span></div></div>
+      <div className="brand"><div className="brand-mark"><AudioLines size={21}/></div><div><strong className="brand-wordmark">JARVIS</strong><span>PERSONAL AI</span></div></div>
       <button className="workspace-button"><div className="workspace-glyph">Y</div><div className="workspace-copy"><strong>My workspace</strong><span>Local environment</span></div><ChevronDown size={15}/></button>
       <div className="nav-label">WORKSPACE</div>
-      <nav>{nav.map(item => <button key={item.id} onClick={() => setPage(item.id)} className={`nav-item ${page === item.id ? 'active' : ''}`}><item.icon size={18}/><span>{item.label}</span>{item.id === 'devices' && devices.length > 0 && <em>{devices.length}</em>}</button>)}</nav>
+      <nav>{nav.map(item => <button key={item.id} title={item.label} aria-label={item.label} aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)} className={`nav-item ${page === item.id ? 'active' : ''}`}><item.icon size={18}/><span>{item.label}</span>{item.id === 'devices' && devices.length > 0 && <em>{devices.length}</em>}</button>)}</nav>
       <div className="sidebar-bottom"><div className="local-card"><div className="local-row"><span className={`status-dot ${ollama.connected ? 'online' : ''}`}/><strong>{ollama.connected ? 'Local AI connected' : 'Waiting for local AI'}</strong></div><p>{ollama.connected ? (model || 'Ollama is ready') : 'Start the backend and Ollama to begin.'}</p><div className="local-foot"><ShieldCheck size={14}/> Your model runs locally</div></div><button className="nav-item muted" onClick={() => setError('Settings are currently configured through backend/.env and frontend/.env.')}><Settings2 size={18}/> Settings</button><div className="profile"><div className="avatar">Y</div><div className="profile-copy"><strong>Yash</strong><span>Personal assistant</span></div><MoreHorizontal size={18}/></div></div>
     </aside>
 
