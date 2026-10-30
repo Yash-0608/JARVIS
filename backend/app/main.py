@@ -38,7 +38,7 @@ def _transcribe_path(path: str) -> dict:
     text = " ".join(segment.text.strip() for segment in segments).strip()
     return {"text": text, "language": info.language, "language_probability": round(float(info.language_probability), 4), "duration": round(float(info.duration), 2)}
 # Development-only browser origins. Native Android requests do not use browser CORS.
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=False, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type", "X-JARVIS-Device", "X-JARVIS-API-Key", "X-JARVIS-Pair-Secret"])
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=False, allow_methods=["GET", "POST", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "X-JARVIS-Device", "X-JARVIS-API-Key", "X-JARVIS-Pair-Secret"])
 
 @app.middleware("http")
 async def authenticate_local_api(request: Request, call_next):
