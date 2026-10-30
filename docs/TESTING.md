@@ -2,7 +2,7 @@
 
 ## Automated checks in GitHub Actions
 
-- Backend pytest: Unicode tokenizer, intent preview phrase boundaries, API-key requirement, pairing protections, social-message confirmation/input validation, and bounded YouTube command parsing/query validation.
+- Backend pytest: Unicode tokenizer, intent preview phrase boundaries, API-key requirement, pairing protections, social-message confirmation/input validation, bounded YouTube command parsing/query validation, prompt/answer forwarding, model error handling, voice transcription contract, phone authorization, and CORS device revocation.
 - Frontend production build using `npm run build`.
 - Android debug APK compilation using `gradle :app:assembleDebug`.
 
