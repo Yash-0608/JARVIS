@@ -90,7 +90,7 @@ The phone pairing bootstrap uses a single-use expiring code and client secret; p
 | WhatsApp / Instagram outbound | Confirmed text-send routes through official Meta APIs; requires credentials and an eligible account |
 | Arbitrary Windows task execution | Not enabled; only safe allow-listed executor design is intended |
 
-See [Implementation report](docs/IMPLEMENTATION_REPORT.md), [Architecture](docs/ARCHITECTURE.md), [Integration requirements](docs/INTEGRATIONS.md), [Android setup](android/README.md), and [Testing plan](docs/TESTING.md).
+See [Implementation report](docs/IMPLEMENTATION_REPORT.md), [Architecture](docs/ARCHITECTURE.md), [Integration requirements](docs/INTEGRATIONS.md), [Android setup](android/README.md), and [Testing plan](docs/TESTING.md), and [End-to-end acceptance cases](docs/END_TO_END_TEST_CASES.md).
 
 The Connections page includes explicitly confirmed WhatsApp/Instagram outbound text forms. Configure the corresponding Meta credentials in backend/.env; real delivery depends on the provider accepting the request. Incoming inbox sync and webhooks are a later stage.
 
